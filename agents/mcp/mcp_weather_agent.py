@@ -12,7 +12,7 @@ from python_a2a import Task, TaskStatus, TaskState
 from python_a2a.models import FunctionCallContent, FunctionResponseContent
 
 from config import logger
-from agents.async_agent import FastAPIAgent
+from agents.mcp.async_agent import FastAPIAgent
 
 class AsyncMCPWeatherAgent(FastAPIAgent):
     """Weather agent that uses MCP for enhanced capabilities with FastAPI backend."""
