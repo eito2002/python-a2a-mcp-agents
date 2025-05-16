@@ -13,14 +13,14 @@ from typing import List, Dict, Optional
 from config import logger
 from network import AgentNetwork
 from agents import WeatherAgent, KnowledgeAgent
-from agents.mcp_weather_agent import MCPWeatherAgent
+from agents.async_mcp_weather_agent import AsyncMCPWeatherAgent
 from server import AgentServer
 from conversation import ConversationOrchestrator
 from utils import find_free_port
 from client import A2ANetworkClient
 from python_a2a.models import Message, MessageRole, TextContent
 
-# MCPサーバーの設定
+# MCP server configurations
 MCP_SERVER_CONFIGS = [
     {
         "module": "mcp_servers.weather_mcp_server",
@@ -34,12 +34,12 @@ MCP_SERVER_CONFIGS = [
     }
 ]
 
-# MCPエージェントの設定
+# FastAPI MCP agent configurations
 MCP_AGENT_CONFIGS = [
     {
-        "name": "weather",
-        "class_module": "agents.mcp_weather_agent",
-        "class_name": "MCPWeatherAgent",
+        "name": "mcp_weather",
+        "class_module": "agents.async_mcp_weather_agent",
+        "class_name": "AsyncMCPWeatherAgent",
         "mcp_servers": {
             "weather": "http://localhost:5001",
             "maps": "http://localhost:5002"
@@ -60,41 +60,67 @@ def list_agents():
         info = AgentServer.get_agent_info(agent_name)
         if info:
             endpoint = info['endpoint']
-            agent_type = "MCP対応" if info.get('is_mcp', False) else "標準"
+            agent_type = "MCP-enabled" if info.get('is_mcp', False) else "Standard"
             print(f"- {agent_name}: {endpoint} ({agent_type})")
             
-            # MCPエージェントの場合は追加情報を表示
+            # Display additional information for MCP agents
             if info.get('is_mcp', False):
                 if 'mcp_servers' in info:
-                    print(f"  - 接続先MCPサーバー: {', '.join(info['mcp_servers'])}")
+                    print(f"  - Connected MCP servers: {', '.join(info['mcp_servers'])}")
                 if 'mcp_tools' in info:
-                    print(f"  - 利用可能なツール: {len(info['mcp_tools'])}")
+                    print(f"  - Available tools: {len(info['mcp_tools'])}")
 
 
 async def start_all_agents():
     """Start all available agent types."""
-    # 標準エージェントの起動
+    # Start standard agents
     agent, port = AgentServer.start_agent(WeatherAgent, "weather")
     print(f"Started Weather Agent on port {port}")
     
     agent, port = AgentServer.start_agent(KnowledgeAgent, "knowledge")
     print(f"Started Knowledge Agent on port {port}")
     
-    # MCP対応エージェントの起動
+    # Start FastAPI MCP-enabled agents
     mcp_servers = {
         "weather": "http://localhost:5001",
         "maps": "http://localhost:5002"
     }
     
     try:
-        agent, port = await AgentServer.start_mcp_agent(
-            MCPWeatherAgent, 
-            "mcp_weather",
-            mcp_servers=mcp_servers
+        # Start the async MCP agent
+        port = find_free_port()
+        agent = AsyncMCPWeatherAgent(mcp_servers=mcp_servers)
+        
+        # Perform initialization if available
+        if hasattr(agent, "initialize") and callable(agent.initialize):
+            # Create event loop for initialization
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(agent.initialize())
+        
+        # Start server in background thread
+        import threading
+        server_thread = threading.Thread(
+            target=agent.run,
+            kwargs={"host": "0.0.0.0", "port": port, "debug": False},
+            daemon=True
         )
-        print(f"Started MCP Weather Agent on port {port}")
+        server_thread.start()
+        
+        # Wait a moment for the server to start
+        time.sleep(0.5)
+        
+        # Register agent information
+        AgentServer.register_agent(
+            name="mcp_weather",
+            agent=agent,
+            port=port,
+            is_mcp=True,
+            mcp_servers=list(mcp_servers.keys())
+        )
+        
+        print(f"Started FastAPI MCP Weather Agent on port {port}")
     except Exception as e:
-        print(f"Failed to start MCP Weather Agent: {e}")
+        print(f"Failed to start FastAPI MCP Weather Agent: {e}")
     
     # Wait a moment for agents to initialize
     time.sleep(1)
@@ -249,90 +275,113 @@ def run_conversation(args):
 
 async def start_mcp_environment(args):
     """Start the MCP environment with servers and agents."""
-    # MCP環境用のロガーを取得
+    # Get logger for MCP environment
     mcp_logger = logging.getLogger("mcp")
     
     mcp_servers = []
     mcp_agents = {}
     
     try:
-        # MCPサーバーの起動
+        # Start MCP servers
         if not args.agents_only:
-            mcp_logger.info("MCPサーバーを起動しています...")
+            mcp_logger.info("Starting MCP servers...")
             mcp_servers = await AgentServer.start_mcp_servers(MCP_SERVER_CONFIGS)
-            mcp_logger.info(f"{len(mcp_servers)}個のMCPサーバーが起動しました")
+            mcp_logger.info(f"Started {len(mcp_servers)} MCP servers")
             
             for server in mcp_servers:
                 mcp_logger.info(f"  - {server['name']} (http://localhost:{server['port']})")
         
-        # MCPエージェントの起動
+        # Start FastAPI MCP agents
         if not args.servers_only:
-            mcp_logger.info("MCPエージェントを起動しています...")
+            mcp_logger.info("Starting FastAPI MCP agents...")
             
             for config in MCP_AGENT_CONFIGS:
-                # モジュールとクラスをインポート
+                # Import module and class
                 module_name = config["class_module"]
                 class_name = config["class_name"]
                 module = __import__(module_name, fromlist=[class_name])
                 agent_class = getattr(module, class_name)
                 
-                # エージェントの起動
+                # Get agent name and MCP server configuration
                 agent_name = config["name"]
                 mcp_servers_config = config.get("mcp_servers")
                 
-                agent, port = await AgentServer.start_mcp_agent(
-                    agent_class=agent_class,
+                # Create FastAPI agent instance
+                port = find_free_port()
+                agent = agent_class(mcp_servers=mcp_servers_config)
+                
+                # Perform initialization if available
+                if hasattr(agent, "initialize") and callable(agent.initialize):
+                    await agent.initialize()
+                
+                # Start server in background thread
+                import threading
+                server_thread = threading.Thread(
+                    target=agent.run,
+                    kwargs={"host": "0.0.0.0", "port": port, "debug": False},
+                    daemon=True
+                )
+                server_thread.start()
+                
+                # Wait a moment for the server to start
+                await asyncio.sleep(0.5)
+                
+                # Register agent information
+                AgentServer.register_agent(
                     name=agent_name,
-                    mcp_servers=mcp_servers_config
+                    agent=agent,
+                    port=port,
+                    is_mcp=True,
+                    mcp_servers=list(mcp_servers_config.keys())
                 )
                 
                 mcp_agents[agent_name] = {
                     "agent": agent,
-                    "port": port
+                    "port": port,
+                    "thread": server_thread
                 }
                 
-                mcp_logger.info(f"  - {agent_name} MCPエージェントが起動しました (http://localhost:{port})")
+                mcp_logger.info(f"  - {agent_name} FastAPI MCP agent started (http://localhost:{port})")
                 
-                # エージェント情報を表示
+                # Display agent information
                 agent_info = AgentServer.get_agent_info(agent_name)
                 if agent_info:
-                    mcp_logger.info(f"    - MCPサーバー: {', '.join(agent_info.get('mcp_servers', []))}")
-                    mcp_logger.info(f"    - 利用可能なツール: {len(agent_info.get('mcp_tools', []))}")
+                    mcp_logger.info(f"    - MCP servers: {', '.join(agent_info.get('mcp_servers', []))}")
         
-        # すべてのMCPエージェントが起動したことを確認
-        print("MCP環境が起動しました。Ctrl+Cで停止します。")
+        # Confirm all MCP agents are started
+        print("MCP environment is running. Press Ctrl+C to stop.")
         
-        # 無限ループでプログラムを維持
+        # Keep program running with infinite loop
         while True:
             await asyncio.sleep(1)
     
     except KeyboardInterrupt:
-        print("\nMCP環境が停止しました。終了処理を実行します...")
+        print("\nMCP environment stopping. Executing shutdown procedures...")
     finally:
-        # MCPエージェントの停止
+        # Stop MCP agents
         for name in list(mcp_agents.keys()):
-            print(f"{name} MCPエージェントが停止しました...")
+            print(f"{name} MCP agent stopped...")
             AgentServer.stop_agent(name)
         
-        # MCPサーバーの停止
+        # Stop MCP servers
         if mcp_servers:
-            print("MCPサーバーが停止しました...")
+            print("MCP servers stopped...")
             AgentServer.stop_mcp_servers(mcp_servers)
         
-        print("すべてのMCPエージェントとサーバーが停止しました")
+        print("All MCP agents and servers have been stopped")
 
 
 def run_mcp_command(args):
     """Run the MCP command by executing the async function."""
-    # 新しいイベントループを作成して使用
+    # Create and use a new event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
     try:
-        # start_mcp_environment関数を実行
+        # Run the start_mcp_environment function
         loop.run_until_complete(start_mcp_environment(args))
     except KeyboardInterrupt:
-        print("\nMCP環境が停止しました。")
+        print("\nMCP environment stopped.")
     finally:
         loop.close()
 
@@ -372,7 +421,7 @@ def main():
     args = parser.parse_args()
     
     if args.command == "start":
-        # 新しいイベントループを作成して使用
+        # Create and use a new event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:

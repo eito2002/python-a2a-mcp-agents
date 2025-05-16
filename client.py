@@ -33,8 +33,9 @@ class A2AAgentClient(A2AClient):
             True if agent is reachable, False otherwise
         """
         try:
-            # Simple HEAD request to check if the endpoint is reachable
-            response = requests.head(self.endpoint_url, timeout=2)
+            # Use GET request instead of HEAD to check if the endpoint is reachable
+            # Many FastAPI implementations don't explicitly handle HEAD requests
+            response = requests.get(self.endpoint_url, timeout=2)
             return response.status_code < 400  # Any success or redirect status
         except requests.RequestException:
             return False
