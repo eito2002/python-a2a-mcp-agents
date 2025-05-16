@@ -6,7 +6,7 @@ import time
 import re
 from python_a2a import AgentCard, AgentSkill, Message, TextContent, MessageRole, Task, TaskStatus, TaskState
 from config import logger
-from agents.base_agent import BaseAgent
+from agents.basic.base_agent import BaseAgent
 
 class MathAgent(BaseAgent):
     """Agent that solves mathematical problems and calculations."""

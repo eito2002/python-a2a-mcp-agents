@@ -13,12 +13,15 @@ Agent Networkは、特殊化された複数のエージェントを調整し、M
 agent_network/
 ├── agents/                    # エージェント実装
 │   ├── __init__.py            # エージェントモジュール初期化
-│   ├── base_agent.py          # 基本エージェントクラス
-│   ├── weather_agent.py       # 天気情報エージェント
-│   ├── knowledge_agent.py     # 知識ベースエージェント
-│   ├── math_agent.py          # 数学計算エージェント
-│   └── mcp_agent.py           # MCP対応エージェント基底クラス
-│   └── mcp_weather_agent.py   # MCP対応天気エージェント
+│   ├── basic/                 # 基本エージェント実装
+│   │   ├── __init__.py        # 基本エージェントモジュール初期化
+│   │   ├── base_agent.py      # 基本エージェントクラス
+│   │   ├── knowledge_agent.py # 知識ベースエージェント
+│   │   └── math_agent.py      # 数学計算エージェント
+│   ├── mcp/                   # MCP対応エージェント実装
+│   │   ├── __init__.py        # MCPエージェントモジュール初期化
+│   │   ├── async_agent.py     # 非同期エージェント基底クラス
+│   │   └── mcp_weather_agent.py # MCP対応天気エージェント
 ├── mcp_servers/               # MCPサーバー実装
 │   ├── weather_mcp_server.py  # 天気情報MCPサーバー
 │   └── maps_mcp_server.py     # 地図生成MCPサーバー
@@ -39,7 +42,6 @@ agent_network/
 ├── config.py                  # 設定とロギング
 ├── conversation.py            # 会話オーケストレーター
 ├── network.py                 # エージェントネットワーク管理
-├── run_mcp_environment.py     # MCP環境起動スクリプト
 └── README.md                  # プロジェクト説明
 ```
 
@@ -47,12 +49,14 @@ agent_network/
 
 ### エージェント (`agents/`)
 
-- **base_agent.py**: すべてのエージェントの基底クラス。基本的なメッセージ処理とタスク処理機能を提供。
-- **weather_agent.py**: 天気情報を提供する特化型エージェント。
-- **knowledge_agent.py**: 一般的な知識クエリに回答する特化型エージェント。
-- **math_agent.py**: 数学計算を処理する特化型エージェント。
-- **mcp_agent.py**: MCP対応エージェントの基底クラス。MCPサーバーとの連携機能を提供。
-- **mcp_weather_agent.py**: MCPを活用した拡張天気情報エージェント。外部天気データと地図生成機能を統合。
+- **基本エージェント (`basic/`)**: 
+  - **base_agent.py**: すべての基本エージェントの基底クラス。A2Aプロトコル対応の基本機能を提供。
+  - **knowledge_agent.py**: 一般的な知識クエリに回答する特化型エージェント。
+  - **math_agent.py**: 数学計算を処理する特化型エージェント。
+
+- **MCP対応エージェント (`mcp/`)**:
+  - **async_agent.py**: FastAPIベースの非同期処理に対応したエージェント基底クラス。`FastAPIAgent`クラスを実装。
+  - **mcp_weather_agent.py**: MCPを活用した拡張天気情報エージェント。`FastAPIAgent`を継承した`AsyncMCPWeatherAgent`クラスを実装。
 
 ### MCPサーバー (`mcp_servers/`)
 
@@ -61,7 +65,7 @@ agent_network/
 
 ### サーバー管理 (`server/`)
 
-- **agent_server.py**: エージェントサーバーのライフサイクル管理。通常エージェントとMCP対応エージェントの起動、停止、情報取得機能を提供。
+- **agent_server.py**: エージェントサーバーのライフサイクル管理。マルチプロセスでエージェントを起動・停止、情報取得機能を提供。
 
 ### ルーティング (`routing/`)
 
@@ -79,7 +83,18 @@ agent_network/
 - **client.py**: エージェントネットワークのクライアント実装。エージェントの発見と通信を担当。
 - **config.py**: 設定とロギングの初期化。グローバル変数の定義。
 - **conversation.py**: 複数エージェント間の会話フローを管理するオーケストレーター。
-- **run_mcp_environment.py**: MCPサーバーとMCPエージェントを起動するための統合スクリプト。
+
+## クラス階層
+
+現在のエージェントクラス階層：
+
+- **A2AServer**: python-a2aライブラリによる基底クラス
+  - **BaseAgent**: A2Aプロトコルを実装する基本エージェント（`agents/basic/base_agent.py`）
+    - **KnowledgeAgent**: 知識クエリを処理する特化型エージェント（`agents/basic/knowledge_agent.py`）
+    - **MathAgent**: 数学計算を処理する特化型エージェント（`agents/basic/math_agent.py`）
+
+- **FastAPIAgent**: FastAPIベースの非同期エージェント基盤（`agents/mcp/async_agent.py`）
+  - **AsyncMCPWeatherAgent**: MCP機能を統合した天気エージェント（`agents/mcp/mcp_weather_agent.py`）
 
 ## MCP統合の特徴
 
@@ -109,7 +124,7 @@ MCPサーバーは、特定の機能やツールを提供する独立したサ�
 python -m agent_network.cli start
 ```
 
-これにより、利用可能なすべてのエージェント（天気、数学、知識）がスタートします。
+これにより、利用可能なすべてのエージェント（知識、数学など）がスタートします。
 
 ### MCPエージェントとサーバーの起動
 
@@ -138,7 +153,7 @@ python -m agent_network.cli list
 特定のエージェントに直接クエリを送信：
 
 ```bash
-python -m agent_network.cli query --agent weather "What's the weather in Tokyo?"
+python -m agent_network.cli query --agent knowledge "What's the capital of Japan?"
 ```
 
 MCP対応エージェントにクエリを送信：
@@ -158,7 +173,7 @@ python -m agent_network.cli query "What's 25 * 12?"
 複数のエージェントを経由する会話を開始：
 
 ```bash
-python -m agent_network.cli conversation --workflow "weather,knowledge" "What's the weather in the capital of Japan?"
+python -m agent_network.cli conversation --workflow "knowledge,math" "What's the population of Tokyo multiplied by 2?"
 ```
 
 MCP対応エージェントを含む会話：
@@ -167,52 +182,20 @@ MCP対応エージェントを含む会話：
 python -m agent_network.cli conversation --workflow "knowledge,mcp_weather" "Show me a weather map of the capital of France"
 ```
 
-## アーキテクチャ
-
-Agent Networkは、モジュール化されたアーキテクチャで設計されています：
-
-- **エージェント**: 各エージェントは特定のドメインに特化
-  - **標準エージェント**: 基本的なメッセージ処理とタスク処理機能
-  - **MCP対応エージェント**: 外部ツールと連携する拡張機能
-- **MCPサーバー**: 特定の機能やツールを提供する独立したサービス
-- **ルーター**: クエリを最適なエージェントに振り分ける
-- **会話オーケストレーター**: エージェント間の会話フローを管理
-- **ネットワークコーディネーター**: エージェントの登録と通信を処理
-
-## MCP統合の特徴
-
-### MCPエージェント
-
-MCPエージェントは、外部ツールやサービスと連携するための拡張機能を持つエージェントです：
-
-- **ツール発見**: 接続されたMCPサーバーから利用可能なツールを自動的に発見
-- **非同期処理**: 非同期メッセージ処理とタスク処理をサポート
-- **関数呼び出し**: LLMからの関数呼び出しをMCPツールに変換
-- **スキル拡張**: 発見したMCPツールをエージェントのスキルとして登録
-
-### MCPサーバー
-
-MCPサーバーは、特定の機能やツールを提供する独立したサービスです：
-
-- **ツール定義**: 関数デコレータを使用した簡単なツール定義
-- **リソース提供**: URIベースのリソースアクセス
-- **非同期対応**: 非同期処理をネイティブにサポート
-- **プロトコル準拠**: MCP (Machine Conversation Protocol) 標準に準拠
-
 ## 拡張
 
 ### 新しいエージェントの追加
 
-標準エージェントを追加するには：
+基本エージェントを追加するには：
 
-1. `BaseAgent`を継承した新しいエージェントクラスを作成
+1. `agents/basic/base_agent.py`の`BaseAgent`を継承した新しいエージェントクラスを作成
 2. `handle_message`と`handle_task`メソッドを実装
 3. エージェントのスキルと機能を定義
 4. エージェントモジュールに登録する
 
 MCP対応エージェントを追加するには：
 
-1. `MCPEnabledAgent`を継承した新しいエージェントクラスを作成
+1. `agents/mcp/async_agent.py`の`FastAPIAgent`を継承した新しいエージェントクラスを作成
 2. `handle_message_async`と`handle_task_async`メソッドを実装
 3. 必要なMCPサーバーとの連携を設定
 4. `cli.py`の設定に追加する
@@ -227,6 +210,6 @@ MCP対応エージェントを追加するには：
 
 - python-a2a: エージェント間通信の基盤
 - asyncio: 非同期処理のサポート
-
-
+- fastapi: FastAPIベースのエージェントのためのWebフレームワーク
+- uvicorn: ASGI サーバー
 - multiprocessing: MCPサーバーの並列実行 

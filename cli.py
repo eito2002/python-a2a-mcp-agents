@@ -12,8 +12,8 @@ from typing import List, Dict, Optional
 
 from config import logger
 from network import AgentNetwork
-from agents import WeatherAgent, KnowledgeAgent
-from agents.async_mcp_weather_agent import AsyncMCPWeatherAgent
+from agents import KnowledgeAgent, MathAgent
+from agents.mcp.mcp_weather_agent import AsyncMCPWeatherAgent
 from server import AgentServer
 from conversation import ConversationOrchestrator
 from utils import find_free_port
@@ -38,7 +38,7 @@ MCP_SERVER_CONFIGS = [
 MCP_AGENT_CONFIGS = [
     {
         "name": "mcp_weather",
-        "class_module": "agents.async_mcp_weather_agent",
+        "class_module": "agents.mcp.mcp_weather_agent",
         "class_name": "AsyncMCPWeatherAgent",
         "mcp_servers": {
             "weather": "http://localhost:5001",
@@ -74,53 +74,12 @@ def list_agents():
 async def start_all_agents():
     """Start all available agent types."""
     # Start standard agents
-    agent, port = AgentServer.start_agent(WeatherAgent, "weather")
-    print(f"Started Weather Agent on port {port}")
     
     agent, port = AgentServer.start_agent(KnowledgeAgent, "knowledge")
     print(f"Started Knowledge Agent on port {port}")
-    
-    # Start FastAPI MCP-enabled agents
-    mcp_servers = {
-        "weather": "http://localhost:5001",
-        "maps": "http://localhost:5002"
-    }
-    
-    try:
-        # Start the async MCP agent
-        port = find_free_port()
-        agent = AsyncMCPWeatherAgent(mcp_servers=mcp_servers)
-        
-        # Perform initialization if available
-        if hasattr(agent, "initialize") and callable(agent.initialize):
-            # Create event loop for initialization
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(agent.initialize())
-        
-        # Start server in background thread
-        import threading
-        server_thread = threading.Thread(
-            target=agent.run,
-            kwargs={"host": "0.0.0.0", "port": port, "debug": False},
-            daemon=True
-        )
-        server_thread.start()
-        
-        # Wait a moment for the server to start
-        time.sleep(0.5)
-        
-        # Register agent information
-        AgentServer.register_agent(
-            name="mcp_weather",
-            agent=agent,
-            port=port,
-            is_mcp=True,
-            mcp_servers=list(mcp_servers.keys())
-        )
-        
-        print(f"Started FastAPI MCP Weather Agent on port {port}")
-    except Exception as e:
-        print(f"Failed to start FastAPI MCP Weather Agent: {e}")
+
+    agent, port = AgentServer.start_agent(MathAgent, "math")
+    print(f"Started Knowledge Agent on port {port}")
     
     # Wait a moment for agents to initialize
     time.sleep(1)
