@@ -10,8 +10,8 @@ import logging
 from typing import List, Dict, Optional
 
 from config import logger
-from agents.mcp.mcp_weather_agent import AsyncMCPWeatherAgent
-from agents.mcp.mcp_travel_agent import AsyncMCPTravelAgent
+from agents import AsyncMCPWeatherAgent
+from agents import AsyncMCPTravelAgent
 from server import AgentServer
 from utils import find_free_port
 from client import A2ANetworkClient

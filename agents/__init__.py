@@ -2,8 +2,7 @@
 Agents module for the agent network.
 """
 
-from .basic.base_agent import BaseAgent
-from .basic.knowledge_agent import KnowledgeAgent
-from .basic.math_agent import MathAgent
+from .mcp.mcp_travel_agent import AsyncMCPTravelAgent
+from .mcp.mcp_weather_agent import AsyncMCPWeatherAgent
 
-__all__ = ['BaseAgent', 'KnowledgeAgent', 'MathAgent'] 
+__all__ = ['AsyncMCPTravelAgent', 'AsyncMCPWeatherAgent'] 
