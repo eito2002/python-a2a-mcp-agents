@@ -437,11 +437,15 @@ class AsyncMCPWeatherAgent(FastAPIAgent):
             if city in query:
                 return city.title()
         
+        # Log when no city is found
+        logger.info(f"[AsyncMCPWeatherAgent] No city found in query: '{query}', using default")
+        
         # Default city if none found
         return "London"
     
     async def _get_current_weather_from_mcp(self, city: str) -> str:
         """Get current weather for a city from MCP server"""
+        logger.info(f"[AsyncMCPWeatherAgent] Getting current weather for: '{city}'")
         try:
             # Call MCP tool to get current weather
             weather_json = await self.call_mcp_tool(
@@ -460,11 +464,12 @@ Temperature: {weather_data['temperature']}°{weather_data['temperature_unit'].up
 Humidity: {weather_data['humidity']}%
 Wind Speed: {weather_data['wind_speed']} {weather_data['wind_unit']}"""
         except Exception as e:
-            logger.error(f"Error getting current weather from MCP: {e}")
-            raise
+            logger.error(f"[AsyncMCPWeatherAgent] Error getting current weather from MCP for '{city}': {e}")
+            return f"Sorry, I couldn't get the current weather information for {city}. Available cities are: London, Paris, New York, Tokyo, Sydney."
     
     async def _get_weather_forecast_from_mcp(self, city: str, days: int = 3) -> str:
         """Get weather forecast for a city from MCP server"""
+        logger.info(f"[AsyncMCPWeatherAgent] Getting {days}-day forecast for: '{city}'")
         try:
             # Call MCP tool to get weather forecast
             forecast_json = await self.call_mcp_tool(
@@ -484,5 +489,5 @@ Wind Speed: {weather_data['wind_speed']} {weather_data['wind_unit']}"""
             
             return result
         except Exception as e:
-            logger.error(f"Error getting weather forecast from MCP: {e}")
-            raise 
+            logger.error(f"[AsyncMCPWeatherAgent] Error getting weather forecast from MCP for '{city}': {e}")
+            return f"Sorry, I couldn't get the weather forecast for {city}. Available cities are: London, Paris, New York, Tokyo, Sydney." 
