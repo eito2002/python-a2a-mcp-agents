@@ -1,23 +1,24 @@
-# Agent Network
+# Agent Network with MCP Integration
 
-Agent Networkは、特殊化された複数のエージェントを調整し、インテリジェントなルーティングを提供するフレームワークです。異なる専門知識を持つエージェント間の協力を可能にします。
+Agent Networkは、特殊化された複数のエージェントを調整し、MCPプロトコルを活用した拡張機能を提供するフレームワークです。異なる専門知識を持つエージェント間の協力と、外部ツールの統合を可能にします。
 
-## 特徴
+## 主な機能
 
-- **専門エージェント**: 天気、数学、一般知識など、特定の機能に特化したエージェント
-- **インテリジェントなルーティング**: キーワードベースまたはAIベースのルーティングで、最適なエージェントに質問を自動的に振り分け
-- **エージェント間通信**: エージェント同士が協力して複雑なタスクを解決する会話ワークフロー
-- **拡張可能なアーキテクチャ**: 新しい種類のエージェントを簡単に追加できる設計
-- **MCP統合**: Machine Conversation Protocol (MCP) を活用した外部ツールとの連携
+- **特殊化されたエージェント**: 各エージェントは特定のタスクに特化（知識クエリ、数学計算、天気情報、旅行計画など）
+- **MCPプロトコル統合**: 外部ツールやサービスとの連携を強化
+- **エージェント間の協調**: 複数エージェント間でのタスク委譲と会話
+- **動的ツール発見**: MCPサーバーからツールを自動的に検出して利用
+- **複数エージェント会話**: 順次または並列にエージェントを活用する会話フロー
 
 ## インストール
 
-必要な依存関係をインストールします：
-
 ```bash
-uv venv
-source ./.venv/bin/activate
-uv pip install python-a2a
+# リポジトリをクローン
+git clone https://github.com/yourusername/agent_network.git
+cd agent_network
+
+# 依存関係をインストール
+pip install -r requirements.txt
 ```
 
 ## 使用方法
@@ -28,7 +29,7 @@ uv pip install python-a2a
 python -m cli start
 ```
 
-これにより、利用可能なすべてのエージェント（天気、数学、知識）がスタートします。
+これにより、利用可能なすべての標準エージェント（知識、数学など）がスタートします。
 
 ### MCPエージェントとサーバーの起動
 
@@ -44,6 +45,9 @@ python -m cli mcp --servers-only
 
 # MCPエージェントのみ起動
 python -m cli mcp --agents-only
+
+# 標準エージェントと同時に起動
+python -m cli mcp --with-standard-agents
 ```
 
 ### 利用可能なエージェントの一覧表示
@@ -57,13 +61,14 @@ python -m cli list
 特定のエージェントに直接クエリを送信：
 
 ```bash
-python -m cli query --agent weather "What's the weather in Tokyo?"
-```
+# 知識エージェントにクエリを送信
+python -m cli query --agent knowledge "What's the capital of Japan?"
 
-MCP対応エージェントにクエリを送信：
-
-```bash
+# MCP対応気象エージェントにクエリを送信
 python -m cli query --agent mcp_weather "Show me a weather map of London"
+
+# MCP対応旅行エージェントにクエリを送信
+python -m cli query --agent mcp_travel "Plan a 3-day trip to Tokyo considering weather"
 ```
 
 または、最適なエージェントに自動的にルーティング：
@@ -77,14 +82,61 @@ python -m cli query "What's 25 * 12?"
 複数のエージェントを経由する会話を開始：
 
 ```bash
-python -m cli conversation --workflow "weather,knowledge" "What's the weather in the capital of Japan?"
+# 知識エージェントと数学エージェントを使った会話
+python -m cli conversation --workflow "knowledge,math" "What's the population of Tokyo multiplied by 2?"
+
+# 知識エージェントと気象エージェントを使った会話
+python -m cli conversation --workflow "knowledge,mcp_weather" "Show me a weather map of the capital of France"
+
+# 旅行エージェントと気象エージェントを使った会話
+python -m cli conversation --workflow "mcp_travel,mcp_weather" "What activities can I do in Paris based on the current weather?"
 ```
 
-MCP対応エージェントを含む会話：
+## 利用可能なエージェント
+
+### 標準エージェント
+
+- **知識エージェント**: 一般的な知識クエリに回答（例：「日本の首都は？」）
+- **数学エージェント**: 数学計算を処理（例：「25 * 12は？」）
+
+### MCP対応エージェント
+
+- **気象エージェント**: 天気情報と天気図を提供（例：「ロンドンの天気は？」）
+- **旅行エージェント**: 旅行計画と活動提案を提供、気象情報に基づいて最適化（例：「天気を考慮して東京への3日間の旅行を計画して」）
+
+## エージェント間連携の例
+
+### 天気に基づく旅行計画
+
+旅行エージェントは気象エージェントと連携して、最新の天気情報に基づいた旅行計画を提供します：
 
 ```bash
-python -m cli conversation --workflow "knowledge,mcp_weather" "Show me a weather map of the capital of France"
+python -m cli query --agent mcp_travel "Plan a weekend trip to London based on weather"
 ```
+
+このクエリを処理するとき、旅行エージェントは：
+
+1. 気象エージェントに接続して現在のロンドンの天気を確認
+2. 天気情報に基づいて適切な活動を計画（雨天ならば屋内活動、晴れならば屋外活動）
+3. 完全な旅行計画を回答として返す
+
+### 複数エージェントを経由する複合クエリ
+
+複雑なクエリでは、複数のエージェントを連携させることができます：
+
+```bash
+python -m cli conversation --workflow "knowledge,mcp_travel,mcp_weather" "What activities should I do during rainy season in Tokyo?"
+```
+
+このクエリの処理フロー：
+
+1. 知識エージェントが「東京の雨季はいつか」を判断
+2. 旅行エージェントが雨季に適した東京の活動を提案
+3. 気象エージェントが現在の東京の天気予報を提供して計画を補完
+
+## カスタマイズと拡張
+
+新しいエージェントやMCPサーバーを追加することで、システムを拡張できます。詳細は`docs/extending.md`を参照してください。
 
 ## アーキテクチャ
 
