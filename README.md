@@ -31,13 +31,36 @@ python -m cli start
 
 これにより、利用可能なすべての標準エージェント（知識、数学など）がスタートします。
 
-### MCPエージェントとサーバーの起動
+### MCPサーバーとエージェントの起動（推奨ワークフロー）
+
+MCP対応エージェントを使用するには、まずMCPサーバーを起動した後、個別のエージェントを起動する必要があります：
+
+```bash
+# ステップ1: まずMCPサーバーを起動
+python -m cli mcp --servers-only
+
+# ステップ2: 各エージェントを別々のターミナルで起動
+# ターミナル1: 天気エージェントを固定ポートで起動
+python -m cli start-agent --agent mcp_weather --port 53537
+
+# ターミナル2: 旅行エージェントを起動し、天気エージェントに接続
+python -m cli start-agent --agent mcp_travel --port 53543 --connect-to weather:53537
+```
+
+この方法により、エージェント間の接続を確実に行えます：
+- MCPサーバーが先に起動されるため、エージェントが適切にツールを検出できます
+- 固定ポートの指定により、エージェント間の接続が安定します
+- `--connect-to`オプションで他のエージェントへの接続を明示的に設定できます
+
+### 全てのコンポーネントを一度に起動（シンプルな方法）
+
+すべてのMCPサーバーとエージェントを一度に起動する場合：
 
 ```bash
 python -m cli mcp
 ```
 
-これにより、MCPサーバーとMCP対応エージェントが起動します。オプションで特定のコンポーネントのみ起動することも可能です：
+オプションで特定のコンポーネントのみ起動することも可能です：
 
 ```bash
 # MCPサーバーのみ起動
@@ -48,6 +71,9 @@ python -m cli mcp --agents-only
 
 # 標準エージェントと同時に起動
 python -m cli mcp --with-standard-agents
+
+# 特定のポートを指定して起動
+python -m cli mcp --agent-ports mcp_weather:53537 mcp_travel:53543
 ```
 
 ### 利用可能なエージェントの一覧表示
@@ -69,6 +95,9 @@ python -m cli query --agent mcp_weather "Show me a weather map of London"
 
 # MCP対応旅行エージェントにクエリを送信
 python -m cli query --agent mcp_travel "Plan a 3-day trip to Tokyo considering weather"
+
+# 特定のポートを指定してクエリを送信
+python -m cli query --agent mcp_travel --agent-ports mcp_travel:53543 "Plan a weekend trip to Kyoto"
 ```
 
 または、最適なエージェントに自動的にルーティング：
@@ -90,6 +119,9 @@ python -m cli conversation --workflow "knowledge,mcp_weather" "Show me a weather
 
 # 旅行エージェントと気象エージェントを使った会話
 python -m cli conversation --workflow "mcp_travel,mcp_weather" "What activities can I do in Paris based on the current weather?"
+
+# 特定のポートを指定して会話を実行
+python -m cli conversation --workflow "mcp_travel,mcp_weather" --agent-ports mcp_travel:53543 mcp_weather:53537 "What activities can I do in Tokyo this weekend?"
 ```
 
 ## 利用可能なエージェント
