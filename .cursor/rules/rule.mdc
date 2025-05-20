@@ -21,10 +21,12 @@ agent_network/
 │   ├── mcp/                   # MCP対応エージェント実装
 │   │   ├── __init__.py        # MCPエージェントモジュール初期化
 │   │   ├── async_agent.py     # 非同期エージェント基底クラス
-│   │   └── mcp_weather_agent.py # MCP対応天気エージェント
+│   │   ├── mcp_weather_agent.py # MCP対応天気エージェント
+│   │   └── mcp_travel_agent.py # MCP対応旅行エージェント
 ├── mcp_servers/               # MCPサーバー実装
 │   ├── weather_mcp_server.py  # 天気情報MCPサーバー
-│   └── maps_mcp_server.py     # 地図生成MCPサーバー
+│   ├── maps_mcp_server.py     # 地図生成MCPサーバー
+│   └── travel_mcp_server.py   # 旅行情報MCPサーバー
 ├── server/                    # サーバー管理
 │   ├── __init__.py            # サーバーモジュール初期化
 │   └── agent_server.py        # エージェントサーバー管理クラス
@@ -57,11 +59,13 @@ agent_network/
 - **MCP対応エージェント (`mcp/`)**:
   - **async_agent.py**: FastAPIベースの非同期処理に対応したエージェント基底クラス。`FastAPIAgent`クラスを実装。
   - **mcp_weather_agent.py**: MCPを活用した拡張天気情報エージェント。`FastAPIAgent`を継承した`AsyncMCPWeatherAgent`クラスを実装。
+  - **mcp_travel_agent.py**: 天気情報と連携した旅行計画エージェント。`FastAPIAgent`を継承した`AsyncMCPTravelAgent`クラスを実装。
 
 ### MCPサーバー (`mcp_servers/`)
 
 - **weather_mcp_server.py**: 天気情報を提供するMCPサーバー。現在の天気、予報、警報などのツールを提供。
 - **maps_mcp_server.py**: 地図生成機能を提供するMCPサーバー。天気マップや地形マップを生成するツールを提供。
+- **travel_mcp_server.py**: 旅行情報を提供するMCPサーバー。目的地情報、天気に基づく活動提案、旅行アドバイザリー、旅程作成などのツールを提供。
 
 ### サーバー管理 (`server/`)
 
@@ -95,6 +99,7 @@ agent_network/
 
 - **FastAPIAgent**: FastAPIベースの非同期エージェント基盤（`agents/mcp/async_agent.py`）
   - **AsyncMCPWeatherAgent**: MCP機能を統合した天気エージェント（`agents/mcp/mcp_weather_agent.py`）
+  - **AsyncMCPTravelAgent**: 天気エージェントと連携する旅行エージェント（`agents/mcp/mcp_travel_agent.py`）
 
 ## MCP統合の特徴
 
@@ -106,6 +111,7 @@ MCPエージェントは、外部ツールやサービスと連携するため�
 - **非同期処理**: 非同期メッセージ処理とタスク処理をサポート
 - **関数呼び出し**: LLMからの関数呼び出しをMCPツールに変換
 - **スキル拡張**: 発見したMCPツールをエージェントのスキルとして登録
+- **エージェント間連携**: 他のエージェントとの通信と協調処理が可能
 
 ### MCPサーバー
 
@@ -121,31 +127,60 @@ MCPサーバーは、特定の機能やツールを提供する独立したサ�
 ### 標準エージェントの起動
 
 ```bash
-python -m agent_network.cli start
+python -m cli start
 ```
 
 これにより、利用可能なすべてのエージェント（知識、数学など）がスタートします。
 
-### MCPエージェントとサーバーの起動
+### MCPサーバーとエージェントの起動（推奨ワークフロー）
+
+MCP対応エージェントを使用するには、まずMCPサーバーを起動した後、個別のエージェントを起動する必要があります：
 
 ```bash
-python -m agent_network.cli mcp
+# ステップ1: まずMCPサーバーを起動（別のターミナルで）
+python -m cli mcp --servers-only
+
+# ステップ2: 各エージェントを別々のターミナルで起動
+# ターミナル1: 天気エージェントを固定ポートで起動
+python -m cli start-agent --agent mcp_weather --port 53537
+
+# ターミナル2: 旅行エージェントを起動し、天気エージェントに接続
+python -m cli start-agent --agent mcp_travel --port 53543 --connect-to weather:53537
 ```
 
-これにより、MCPサーバーとMCP対応エージェントが起動します。オプションで特定のコンポーネントのみ起動することも可能です：
+この方法により、エージェント間の接続を確実に行えます：
+- MCPサーバーが先に起動されるため、エージェントが適切にツールを検出できます
+- 固定ポートの指定により、エージェント間の接続が安定します
+- `--connect-to`オプションで他のエージェントへの接続を明示的に設定できます
+
+### オールインワン起動（シンプルな方法）
+
+すべてのMCPサーバーとエージェントを一度に起動する場合：
+
+```bash
+python -m cli mcp
+```
+
+オプションで特定のコンポーネントのみ起動することも可能です：
 
 ```bash
 # MCPサーバーのみ起動
-python -m agent_network.cli mcp --servers-only
+python -m cli mcp --servers-only
 
 # MCPエージェントのみ起動
-python -m agent_network.cli mcp --agents-only
+python -m cli mcp --agents-only
+
+# 標準エージェントと同時に起動
+python -m cli mcp --with-standard-agents
+
+# 特定のポートを指定して起動
+python -m cli mcp --agent-ports mcp_weather:53537 mcp_travel:53543
 ```
 
 ### 利用可能なエージェントの一覧表示
 
 ```bash
-python -m agent_network.cli list
+python -m cli list
 ```
 
 ### クエリの送信
@@ -153,19 +188,31 @@ python -m agent_network.cli list
 特定のエージェントに直接クエリを送信：
 
 ```bash
-python -m agent_network.cli query --agent knowledge "What's the capital of Japan?"
+python -m cli query --agent knowledge "What's the capital of Japan?"
 ```
 
 MCP対応エージェントにクエリを送信：
 
 ```bash
-python -m agent_network.cli query --agent mcp_weather "Show me a weather map of London"
+python -m cli query --agent mcp_weather "Show me a weather map of London"
+```
+
+旅行エージェントにクエリを送信：
+
+```bash
+python -m cli query --agent mcp_travel "Plan a 3-day trip to Tokyo considering weather"
+```
+
+ポートを明示的に指定してエージェントにクエリを送信：
+
+```bash
+python -m cli query --agent mcp_travel --agent-ports mcp_travel:53543 "Plan a weekend trip to Kyoto"
 ```
 
 または、最適なエージェントに自動的にルーティング：
 
 ```bash
-python -m agent_network.cli query "What's 25 * 12?"
+python -m cli query "What's 25 * 12?"
 ```
 
 ### エージェント間会話の実行
@@ -173,13 +220,25 @@ python -m agent_network.cli query "What's 25 * 12?"
 複数のエージェントを経由する会話を開始：
 
 ```bash
-python -m agent_network.cli conversation --workflow "knowledge,math" "What's the population of Tokyo multiplied by 2?"
+python -m cli conversation --workflow "knowledge,math" "What's the population of Tokyo multiplied by 2?"
 ```
 
 MCP対応エージェントを含む会話：
 
 ```bash
-python -m agent_network.cli conversation --workflow "knowledge,mcp_weather" "Show me a weather map of the capital of France"
+python -m cli conversation --workflow "knowledge,mcp_weather" "Show me a weather map of the capital of France"
+```
+
+旅行と天気エージェント間の連携会話：
+
+```bash
+python -m cli conversation --workflow "mcp_travel,mcp_weather" "What activities can I do in Paris based on the current weather?"
+```
+
+ポートを明示的に指定して会話を実行：
+
+```bash
+python -m cli conversation --workflow "mcp_travel,mcp_weather" --agent-ports mcp_travel:53543 mcp_weather:53537 "What activities can I do in Tokyo this weekend?"
 ```
 
 ## 拡張

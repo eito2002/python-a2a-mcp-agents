@@ -104,7 +104,9 @@ class AgentServer:
     
     @staticmethod
     def register_agent(name: str, agent: Any, port: int, is_mcp: bool = False, 
-                       mcp_servers: Optional[List[str]] = None) -> None:
+                       mcp_servers: Optional[List[str]] = None,
+                       agent_connections: Optional[List[str]] = None,
+                       **kwargs) -> None:
         """
         Register an agent (for externally launched agents)
         
@@ -114,6 +116,8 @@ class AgentServer:
             port: Port being used
             is_mcp: Whether this is an MCP-enabled agent
             mcp_servers: List of connected MCP server names
+            agent_connections: List of connected agent names
+            **kwargs: Additional arguments to store with the agent info
         """
         # Overwrite if an agent with the same name is already registered
         if name in _running_agents:
@@ -131,6 +135,13 @@ class AgentServer:
         # Add additional information for MCP agents
         if is_mcp and mcp_servers:
             agent_info["mcp_servers"] = mcp_servers
+        
+        # Add information about connected agents
+        if agent_connections:
+            agent_info["agent_connections"] = agent_connections
+        
+        # Add any other provided information
+        agent_info.update(kwargs)
         
         _running_agents[name] = agent_info
         logger.info(f"Registered agent {name} on port {port}")
@@ -197,6 +208,10 @@ class AgentServer:
         # Add MCP tool information if available
         if hasattr(agent, "mcp_tools") and agent.mcp_tools:
             _running_agents[name]["mcp_tools"] = agent.mcp_tools
+        
+        # Add agent connections information if available
+        if hasattr(agent, "agent_connections") and agent.agent_connections:
+            _running_agents[name]["agent_connections"] = list(agent.agent_connections.keys())
         
         logger.info(f"Started MCP agent {name} on port {port}")
         
