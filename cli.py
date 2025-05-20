@@ -149,7 +149,7 @@ async def start_single_agent(args):
         )
         
         print(f"{args.agent} agent is running on port {agent_port}. Press Ctrl+C to stop.")
-        print(f"Use 'python -m cli query --agent {args.agent} --agent-ports {args.agent}:{agent_port} \"Your query here\"' to query this agent.")
+        print(f"Use 'python -m cli query --agent {args.agent} \"Your query here\" --agent-ports {args.agent}:{agent_port}' to query this agent.")
         
         # Keep the program running
         while True:
