@@ -13,11 +13,6 @@ Agent Networkは、特殊化された複数のエージェントを調整し、M
 agent_network/
 ├── agents/                    # エージェント実装
 │   ├── __init__.py            # エージェントモジュール初期化
-│   ├── basic/                 # 基本エージェント実装
-│   │   ├── __init__.py        # 基本エージェントモジュール初期化
-│   │   ├── base_agent.py      # 基本エージェントクラス
-│   │   ├── knowledge_agent.py # 知識ベースエージェント
-│   │   └── math_agent.py      # 数学計算エージェント
 │   ├── mcp/                   # MCP対応エージェント実装
 │   │   ├── __init__.py        # MCPエージェントモジュール初期化
 │   │   ├── async_agent.py     # 非同期エージェント基底クラス
@@ -42,7 +37,6 @@ agent_network/
 ├── cli.py                     # コマンドラインインターフェース
 ├── client.py                  # ネットワーククライアント
 ├── config.py                  # 設定とロギング
-├── conversation.py            # 会話オーケストレーター
 ├── network.py                 # エージェントネットワーク管理
 └── README.md                  # プロジェクト説明
 ```
@@ -50,11 +44,6 @@ agent_network/
 ## 主要コンポーネントの役割
 
 ### エージェント (`agents/`)
-
-- **基本エージェント (`basic/`)**: 
-  - **base_agent.py**: すべての基本エージェントの基底クラス。A2Aプロトコル対応の基本機能を提供。
-  - **knowledge_agent.py**: 一般的な知識クエリに回答する特化型エージェント。
-  - **math_agent.py**: 数学計算を処理する特化型エージェント。
 
 - **MCP対応エージェント (`mcp/`)**:
   - **async_agent.py**: FastAPIベースの非同期処理に対応したエージェント基底クラス。`FastAPIAgent`クラスを実装。
@@ -86,16 +75,10 @@ agent_network/
 - **cli.py**: コマンドラインインターフェース。ユーザーがエージェントを起動し、クエリを送信するためのツール。
 - **client.py**: エージェントネットワークのクライアント実装。エージェントの発見と通信を担当。
 - **config.py**: 設定とロギングの初期化。グローバル変数の定義。
-- **conversation.py**: 複数エージェント間の会話フローを管理するオーケストレーター。
 
 ## クラス階層
 
 現在のエージェントクラス階層：
-
-- **A2AServer**: python-a2aライブラリによる基底クラス
-  - **BaseAgent**: A2Aプロトコルを実装する基本エージェント（`agents/basic/base_agent.py`）
-    - **KnowledgeAgent**: 知識クエリを処理する特化型エージェント（`agents/basic/knowledge_agent.py`）
-    - **MathAgent**: 数学計算を処理する特化型エージェント（`agents/basic/math_agent.py`）
 
 - **FastAPIAgent**: FastAPIベースの非同期エージェント基盤（`agents/mcp/async_agent.py`）
   - **AsyncMCPWeatherAgent**: MCP機能を統合した天気エージェント（`agents/mcp/mcp_weather_agent.py`）
@@ -124,21 +107,13 @@ MCPサーバーは、特定の機能やツールを提供する独立したサ�
 
 ## 使用方法
 
-### 標準エージェントの起動
-
-```bash
-python -m cli start
-```
-
-これにより、利用可能なすべてのエージェント（知識、数学など）がスタートします。
-
 ### MCPサーバーとエージェントの起動（推奨ワークフロー）
 
 MCP対応エージェントを使用するには、まずMCPサーバーを起動した後、個別のエージェントを起動する必要があります：
 
 ```bash
-# ステップ1: まずMCPサーバーを起動（別のターミナルで）
-python -m cli mcp --servers-only
+# ステップ1: まずMCPサーバーを起動
+python -m cli mcp
 
 # ステップ2: 各エージェントを別々のターミナルで起動
 # ターミナル1: 天気エージェントを固定ポートで起動
@@ -153,117 +128,23 @@ python -m cli start-agent --agent mcp_travel --port 53543 --connect-to weather:5
 - 固定ポートの指定により、エージェント間の接続が安定します
 - `--connect-to`オプションで他のエージェントへの接続を明示的に設定できます
 
-### オールインワン起動（シンプルな方法）
-
-すべてのMCPサーバーとエージェントを一度に起動する場合：
-
-```bash
-python -m cli mcp
-```
-
-オプションで特定のコンポーネントのみ起動することも可能です：
-
-```bash
-# MCPサーバーのみ起動
-python -m cli mcp --servers-only
-
-# MCPエージェントのみ起動
-python -m cli mcp --agents-only
-
-# 標準エージェントと同時に起動
-python -m cli mcp --with-standard-agents
-
-# 特定のポートを指定して起動
-python -m cli mcp --agent-ports mcp_weather:53537 mcp_travel:53543
-```
-
-### 利用可能なエージェントの一覧表示
-
-```bash
-python -m cli list
-```
-
 ### クエリの送信
 
 特定のエージェントに直接クエリを送信：
 
 ```bash
-python -m cli query --agent knowledge "What's the capital of Japan?"
-```
+# MCP対応気象エージェントにクエリを送信
+python -m cli query --agent mcp_weather --agent-ports mcp_weather:53537 "Show me a weather map of London"
 
-MCP対応エージェントにクエリを送信：
-
-```bash
-python -m cli query --agent mcp_weather "Show me a weather map of London"
-```
-
-旅行エージェントにクエリを送信：
-
-```bash
-python -m cli query --agent mcp_travel "Plan a 3-day trip to Tokyo considering weather"
-```
-
-ポートを明示的に指定してエージェントにクエリを送信：
-
-```bash
-python -m cli query --agent mcp_travel --agent-ports mcp_travel:53543 "Plan a weekend trip to Kyoto"
+# MCP対応旅行エージェントにクエリを送信
+python -m cli query --agent mcp_travel --agent-ports mcp_travel:53543 "Plan a 3-day trip to Tokyo considering weather"
 ```
 
 または、最適なエージェントに自動的にルーティング：
 
 ```bash
-python -m cli query "What's 25 * 12?"
+python -m cli query --agent-ports mcp_weather:53537 mcp_travel:53543 "What's the weather like in Tokyo?"
 ```
-
-### エージェント間会話の実行
-
-複数のエージェントを経由する会話を開始：
-
-```bash
-python -m cli conversation --workflow "knowledge,math" "What's the population of Tokyo multiplied by 2?"
-```
-
-MCP対応エージェントを含む会話：
-
-```bash
-python -m cli conversation --workflow "knowledge,mcp_weather" "Show me a weather map of the capital of France"
-```
-
-旅行と天気エージェント間の連携会話：
-
-```bash
-python -m cli conversation --workflow "mcp_travel,mcp_weather" "What activities can I do in Paris based on the current weather?"
-```
-
-ポートを明示的に指定して会話を実行：
-
-```bash
-python -m cli conversation --workflow "mcp_travel,mcp_weather" --agent-ports mcp_travel:53543 mcp_weather:53537 "What activities can I do in Tokyo this weekend?"
-```
-
-## 拡張
-
-### 新しいエージェントの追加
-
-基本エージェントを追加するには：
-
-1. `agents/basic/base_agent.py`の`BaseAgent`を継承した新しいエージェントクラスを作成
-2. `handle_message`と`handle_task`メソッドを実装
-3. エージェントのスキルと機能を定義
-4. エージェントモジュールに登録する
-
-MCP対応エージェントを追加するには：
-
-1. `agents/mcp/async_agent.py`の`FastAPIAgent`を継承した新しいエージェントクラスを作成
-2. `handle_message_async`と`handle_task_async`メソッドを実装
-3. 必要なMCPサーバーとの連携を設定
-4. `cli.py`の設定に追加する
-
-### 新しいMCPサーバーの追加
-
-1. `FastMCP`を使用して新しいMCPサーバーを作成
-2. ツールとリソースを関数デコレータで定義
-3. `cli.py`の設定に追加する
 
 ## 依存関係
 
