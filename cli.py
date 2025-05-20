@@ -114,6 +114,138 @@ async def start_all_agents():
         # You could add cleanup logic here if needed
 
 
+async def start_single_agent(args):
+    """Start a single agent with specified configuration and connections."""
+    logger.info(f"Starting single agent: {args.agent}")
+    
+    # Process agent ports
+    agent_port = args.port if args.port else find_free_port()
+    
+    # Process external agent connections
+    agent_connections = {}
+    if args.connect_to:
+        for conn_spec in args.connect_to:
+            if ':' not in conn_spec:
+                logger.error(f"Invalid connection specification: {conn_spec}. Format should be agent_name:port")
+                return
+            agent_name, agent_port_str = conn_spec.split(':', 1)
+            try:
+                agent_connections[agent_name] = f"http://localhost:{int(agent_port_str)}"
+                logger.info(f"Adding connection to {agent_name} at port {agent_port_str}")
+            except ValueError:
+                logger.error(f"Port must be a number: {agent_port_str}")
+                return
+    
+    try:
+        # Handle standard agents
+        if args.agent in ["knowledge", "math"]:
+            if args.agent == "knowledge":
+                agent, port = AgentServer.start_agent(KnowledgeAgent, "knowledge", port=agent_port)
+                logger.info(f"Started Knowledge Agent on port {port}")
+            else:  # math
+                agent, port = AgentServer.start_agent(MathAgent, "math", port=agent_port)
+                logger.info(f"Started Math Agent on port {port}")
+            
+            agent_type = "Standard"
+        
+        # Handle MCP agents
+        else:
+            # Find agent configuration
+            agent_config = None
+            for config in MCP_AGENT_CONFIGS:
+                if config["name"] == args.agent:
+                    agent_config = config
+                    break
+            
+            if not agent_config:
+                logger.error(f"Unknown agent: {args.agent}")
+                return
+            
+            # Import agent class
+            module_name = agent_config["class_module"]
+            class_name = agent_config["class_name"]
+            module = __import__(module_name, fromlist=[class_name])
+            agent_class = getattr(module, class_name)
+            
+            # Get MCP server configurations
+            mcp_servers_config = agent_config.get("mcp_servers", {})
+            
+            # Merge default and specified agent connections
+            config_connections = agent_config.get("agent_connections", {})
+            merged_connections = {**config_connections, **agent_connections}
+            logger.info(f"Using agent connections: {merged_connections}")
+            
+            # Create agent instance
+            if merged_connections:
+                agent = agent_class(mcp_servers=mcp_servers_config, agent_connections=merged_connections)
+            else:
+                agent = agent_class(mcp_servers=mcp_servers_config)
+            
+            # Initialize if needed
+            if hasattr(agent, "initialize") and callable(agent.initialize):
+                await agent.initialize()
+            
+            # Start server thread
+            import threading
+            server_thread = threading.Thread(
+                target=agent.run,
+                kwargs={"host": "0.0.0.0", "port": agent_port, "debug": False},
+                daemon=True
+            )
+            server_thread.start()
+            
+            # Wait for server to start
+            await asyncio.sleep(0.5)
+            
+            # Register agent info
+            extra_info = {
+                "is_mcp": True,
+                "mcp_servers": list(mcp_servers_config.keys())
+            }
+            
+            # Add agent connections if available
+            if merged_connections:
+                extra_info["agent_connections"] = list(merged_connections.keys())
+            
+            AgentServer.register_agent(
+                name=args.agent,
+                agent=agent,
+                port=agent_port,
+                **extra_info
+            )
+            
+            port = agent_port
+            agent_type = "MCP-enabled"
+        
+        print(f"{args.agent} agent ({agent_type}) is running on port {port}. Press Ctrl+C to stop.")
+        print(f"Use 'python -m cli query --agent {args.agent} --agent-ports {args.agent}:{port} \"Your query here\"' to query this agent.")
+        
+        # Keep the program running
+        while True:
+            await asyncio.sleep(1)
+    
+    except KeyboardInterrupt:
+        print(f"\nStopping {args.agent} agent...")
+    finally:
+        # Stop agent
+        AgentServer.stop_agent(args.agent)
+
+
+def run_single_agent_command(args):
+    """Run the start-agent command by executing the async function."""
+    # Create and use a new event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        # Run the start_single_agent function
+        loop.run_until_complete(start_single_agent(args))
+    except KeyboardInterrupt:
+        print(f"\n{args.agent} agent stopped.")
+    finally:
+        loop.close()
+
+
 def query_agent(args):
     """Query a specific agent or let the network route the query."""
     if not args.query:
@@ -261,6 +393,19 @@ async def start_mcp_environment(args):
     mcp_agents = {}
     agent_ports = {}
     
+    # Process agent-ports argument if provided
+    if args.agent_ports:
+        for port_spec in args.agent_ports:
+            if ':' not in port_spec:
+                mcp_logger.error(f"Invalid port specification: {port_spec}. Format should be agent_name:port")
+                continue
+            agent_name, port = port_spec.split(':', 1)
+            try:
+                agent_ports[agent_name] = int(port)
+                mcp_logger.info(f"Using specified port for {agent_name}: {port}")
+            except ValueError:
+                mcp_logger.error(f"Port must be a number: {port}")
+    
     try:
         # Start MCP servers
         if not args.agents_only:
@@ -301,15 +446,19 @@ async def start_mcp_environment(args):
                 agent_name = config["name"]
                 mcp_servers_config = config.get("mcp_servers", {})
                 
-                # Get agent connections and update any ports if we started standard agents
+                # Get agent connections and update any ports if we started standard agents or they were specified
                 agent_connections = config.get("agent_connections", {})
                 if agent_connections and agent_ports:
                     for conn_name, conn_url in list(agent_connections.items()):
                         if conn_name in agent_ports:
-                            agent_connections[conn_name] = f"http://localhost:{agent_ports[conn_name]}"
+                            new_url = f"http://localhost:{agent_ports[conn_name]}"
+                            agent_connections[conn_name] = new_url
+                            mcp_logger.info(f"Updated {agent_name}'s connection to {conn_name}: {new_url}")
                 
                 # Create FastAPI agent instance
-                port = find_free_port()
+                port = agent_ports.get(agent_name) if agent_name in agent_ports else find_free_port()
+                
+                mcp_logger.info(f"Creating {agent_name} agent with connections: {agent_connections}")
                 if agent_connections:
                     agent = agent_class(mcp_servers=mcp_servers_config, agent_connections=agent_connections)
                 else:
@@ -440,6 +589,17 @@ def main():
     mcp_parser.add_argument("--servers-only", action="store_true", help="Start only MCP servers")
     mcp_parser.add_argument("--agents-only", action="store_true", help="Start only MCP agents")
     mcp_parser.add_argument("--with-standard-agents", action="store_true", help="Also start standard agents (knowledge, math)")
+    mcp_parser.add_argument("--agent-ports", nargs="+", 
+                           help="Custom agent ports in format 'agent_name:port' (e.g., 'mcp_weather:53537 mcp_travel:53543')")
+    
+    # New command: start-agent (starts a single agent with configurable connections)
+    start_agent_parser = subparsers.add_parser("start-agent", help="Start a single agent with configurable connections")
+    start_agent_parser.add_argument("--agent", required=True, 
+                                   help="Agent to start (knowledge, math, mcp_weather, mcp_travel)")
+    start_agent_parser.add_argument("--port", type=int, 
+                                  help="Port to use for this agent (if not specified, a free port will be found)")
+    start_agent_parser.add_argument("--connect-to", nargs="+", 
+                                   help="Agents to connect to in format 'agent_name:port' (e.g., 'weather:53537')")
     
     args = parser.parse_args()
     
@@ -459,6 +619,8 @@ def main():
         run_conversation(args)
     elif args.command == "mcp":
         run_mcp_command(args)
+    elif args.command == "start-agent":
+        run_single_agent_command(args)
     else:
         parser.print_help()
 
