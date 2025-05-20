@@ -72,10 +72,17 @@ def get_current_weather(location: str):
     Returns:
         Current weather data for the location
     """
-    location = location.lower()
+    # デバッグログを追加
+    print(f"[Weather MCP] get_current_weather called with location: '{location}'")
+    
+    # 大文字小文字に関係なく処理できるように小文字に変換
+    location = location.lower().strip()
     
     if location not in WEATHER_DATA:
-        return error_response(f"Weather data not available for {location}")
+        # 利用可能な都市の一覧を表示
+        available_cities = ", ".join(WEATHER_DATA.keys())
+        print(f"[Weather MCP] Weather data not available for {location}. Available cities: {available_cities}")
+        return error_response(f"Weather data not available for {location}. Available cities: {available_cities}")
     
     data = WEATHER_DATA[location]
     
@@ -94,6 +101,7 @@ def get_current_weather(location: str):
         "timestamp": datetime.now().isoformat()
     }
     
+    print(f"[Weather MCP] Successfully returning weather data for {location}")
     return text_response(json.dumps(result, indent=2))
 
 @weather_mcp.tool(
@@ -111,10 +119,17 @@ def get_weather_forecast(location: str, days: int = 3):
     Returns:
         Weather forecast data for the location
     """
-    location = location.lower()
+    # デバッグログを追加
+    print(f"[Weather MCP] get_weather_forecast called with location: '{location}', days: {days}")
+    
+    # 大文字小文字に関係なく処理できるように小文字に変換
+    location = location.lower().strip()
     
     if location not in WEATHER_DATA:
-        return error_response(f"Weather data not available for {location}")
+        # 利用可能な都市の一覧を表示
+        available_cities = ", ".join(WEATHER_DATA.keys())
+        print(f"[Weather MCP] Weather data not available for {location}. Available cities: {available_cities}")
+        return error_response(f"Weather data not available for {location}. Available cities: {available_cities}")
     
     # Limit forecast days
     days = min(max(1, days), 7)
@@ -154,6 +169,7 @@ def get_weather_forecast(location: str, days: int = 3):
         "generated_at": datetime.now().isoformat()
     }
     
+    print(f"[Weather MCP] Successfully returning forecast data for {location}")
     return text_response(json.dumps(result, indent=2))
 
 @weather_mcp.tool(

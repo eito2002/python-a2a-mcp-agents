@@ -130,6 +130,9 @@ class AsyncMCPWeatherAgent(FastAPIAgent):
         
         tool_url = f"{server_url}/tools/{tool_name}"
         
+        # デバッグ情報を追加
+        logger.info(f"[AsyncMCPWeatherAgent] Calling MCP tool: {tool_name} on {server_name} with params: {kwargs}")
+        
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(tool_url, json=kwargs) as response:
@@ -138,6 +141,7 @@ class AsyncMCPWeatherAgent(FastAPIAgent):
                         return result
                     else:
                         error_text = await response.text()
+                        logger.error(f"[AsyncMCPWeatherAgent] MCP server returned error: {response.status} - {error_text}")
                         raise RuntimeError(f"Error calling MCP tool: {response.status} - {error_text}")
         except Exception as e:
             logger.error(f"[AsyncMCPWeatherAgent] Error calling MCP tool {tool_name}: {e}")
@@ -447,15 +451,20 @@ class AsyncMCPWeatherAgent(FastAPIAgent):
         """Get current weather for a city from MCP server"""
         logger.info(f"[AsyncMCPWeatherAgent] Getting current weather for: '{city}'")
         try:
+            # 都市名のフォーマットを調整（先頭は大文字、残りは小文字）
+            formatted_city = city.strip().title()
+            logger.info(f"[AsyncMCPWeatherAgent] Formatted city name: {formatted_city}")
+            
             # Call MCP tool to get current weather
             weather_json = await self.call_mcp_tool(
                 server_name="weather",
                 tool_name="get_current_weather",
-                location=city.lower()
+                location=formatted_city
             )
             
             # Parse JSON response
             weather_data = json.loads(weather_json)
+            logger.info(f"[AsyncMCPWeatherAgent] Successfully received weather data for {formatted_city}")
             
             # Format weather information
             return f"""Current Weather in {weather_data['location']}:
@@ -471,16 +480,21 @@ Wind Speed: {weather_data['wind_speed']} {weather_data['wind_unit']}"""
         """Get weather forecast for a city from MCP server"""
         logger.info(f"[AsyncMCPWeatherAgent] Getting {days}-day forecast for: '{city}'")
         try:
+            # 都市名のフォーマットを調整（先頭は大文字、残りは小文字）
+            formatted_city = city.strip().title()
+            logger.info(f"[AsyncMCPWeatherAgent] Formatted city name: {formatted_city}")
+            
             # Call MCP tool to get weather forecast
             forecast_json = await self.call_mcp_tool(
                 server_name="weather",
                 tool_name="get_weather_forecast",
-                location=city.lower(),
+                location=formatted_city,
                 days=days
             )
             
             # Parse JSON response
             forecast_data = json.loads(forecast_json)
+            logger.info(f"[AsyncMCPWeatherAgent] Successfully received forecast data for {formatted_city}")
             
             # Format forecast as text
             result = f"{days}-Day Weather Forecast for {forecast_data['location']}:\n\n"
