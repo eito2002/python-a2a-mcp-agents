@@ -72,14 +72,14 @@ def get_current_weather(location: str):
     Returns:
         Current weather data for the location
     """
-    # デバッグログを追加
+    # Add debug log
     print(f"[Weather MCP] get_current_weather called with location: '{location}'")
     
-    # 大文字小文字に関係なく処理できるように小文字に変換
+    # Convert to lowercase for case-insensitive processing
     location = location.lower().strip()
     
     if location not in WEATHER_DATA:
-        # 利用可能な都市の一覧を表示
+        # Display list of available cities
         available_cities = ", ".join(WEATHER_DATA.keys())
         print(f"[Weather MCP] Weather data not available for {location}. Available cities: {available_cities}")
         return error_response(f"Weather data not available for {location}. Available cities: {available_cities}")
@@ -119,14 +119,20 @@ def get_weather_forecast(location: str, days: int = 3):
     Returns:
         Weather forecast data for the location
     """
-    # デバッグログを追加
+    # Add debug log
     print(f"[Weather MCP] get_weather_forecast called with location: '{location}', days: {days}")
     
-    # 大文字小文字に関係なく処理できるように小文字に変換
-    location = location.lower().strip()
+    # Parameter validation
+    if location is None:
+        print(f"[Weather MCP] Error: location parameter is None")
+        return error_response("Location parameter is required")
+    
+    # Convert to lowercase for case-insensitive processing
+    location = str(location).lower().strip()
+    print(f"[Weather MCP] Normalized location: '{location}'")
     
     if location not in WEATHER_DATA:
-        # 利用可能な都市の一覧を表示
+        # Display list of available cities
         available_cities = ", ".join(WEATHER_DATA.keys())
         print(f"[Weather MCP] Weather data not available for {location}. Available cities: {available_cities}")
         return error_response(f"Weather data not available for {location}. Available cities: {available_cities}")

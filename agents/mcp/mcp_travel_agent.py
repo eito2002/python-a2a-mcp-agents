@@ -465,15 +465,25 @@ class AsyncMCPTravelAgent(FastAPIAgent):
             Trip plan
         """
         # Get weather forecast from weather agent
-        weather_query = f"What's the weather forecast for {location} for the next {days} days?"
+        logger.info(f"[AsyncMCPTravelAgent] Planning {days}-day trip to {location}")
+        
+        # Format the city name (capitalize first letter, lowercase the rest)
+        formatted_location = location.strip().title()
+        logger.info(f"[AsyncMCPTravelAgent] Formatted location name: {formatted_location}")
+        
+        weather_query = f"What's the weather forecast for {formatted_location} for the next {days} days?"
+        logger.info(f"[AsyncMCPTravelAgent] Querying weather agent with: '{weather_query}'")
+        
         try:
             weather_forecast = await self.call_agent("weather", weather_query)
+            logger.info(f"[AsyncMCPTravelAgent] Successfully received weather forecast for {formatted_location}")
         except Exception as e:
             logger.error(f"[AsyncMCPTravelAgent] Error getting weather forecast: {e}")
+            logger.error(f"[AsyncMCPTravelAgent] Exception details: {str(e.__class__.__name__)} - {str(e)}")
             weather_forecast = "Weather forecast unavailable"
         
         # Generate trip plan based on weather and destination
-        trip_plan = f"🧳 {days}-Day Trip Plan for {location} 🧳\n\n"
+        trip_plan = f"🧳 {days}-Day Trip Plan for {formatted_location} 🧳\n\n"
         trip_plan += f"Weather Forecast: {weather_forecast}\n\n"
         
         # Add day-by-day itinerary (simplified example)

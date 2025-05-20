@@ -451,7 +451,7 @@ class AsyncMCPWeatherAgent(FastAPIAgent):
         """Get current weather for a city from MCP server"""
         logger.info(f"[AsyncMCPWeatherAgent] Getting current weather for: '{city}'")
         try:
-            # 都市名のフォーマットを調整（先頭は大文字、残りは小文字）
+            # Format the city name (capitalize first letter, lowercase the rest)
             formatted_city = city.strip().title()
             logger.info(f"[AsyncMCPWeatherAgent] Formatted city name: {formatted_city}")
             
@@ -480,9 +480,13 @@ Wind Speed: {weather_data['wind_speed']} {weather_data['wind_unit']}"""
         """Get weather forecast for a city from MCP server"""
         logger.info(f"[AsyncMCPWeatherAgent] Getting {days}-day forecast for: '{city}'")
         try:
-            # 都市名のフォーマットを調整（先頭は大文字、残りは小文字）
+            # Format the city name (capitalize first letter, lowercase the rest)
             formatted_city = city.strip().title()
             logger.info(f"[AsyncMCPWeatherAgent] Formatted city name: {formatted_city}")
+            
+            # Add more detailed debug logs
+            params = {"location": formatted_city, "days": days}
+            logger.info(f"[AsyncMCPWeatherAgent] Calling MCP tool get_weather_forecast with params: {params}")
             
             # Call MCP tool to get weather forecast
             forecast_json = await self.call_mcp_tool(
@@ -492,16 +496,39 @@ Wind Speed: {weather_data['wind_speed']} {weather_data['wind_unit']}"""
                 days=days
             )
             
+            # Output received JSON for debugging
+            logger.info(f"[AsyncMCPWeatherAgent] Received forecast JSON: {forecast_json[:200]}...")
+            
             # Parse JSON response
             forecast_data = json.loads(forecast_json)
             logger.info(f"[AsyncMCPWeatherAgent] Successfully received forecast data for {formatted_city}")
             
-            # Format forecast as text
-            result = f"{days}-Day Weather Forecast for {forecast_data['location']}:\n\n"
-            for day in forecast_data['forecast']:
-                result += f"{day['date']}: {day['condition']}, High: {day['temperature_high']}°C, Low: {day['temperature_low']}°C\n"
+            # Debug response structure
+            logger.info(f"[AsyncMCPWeatherAgent] Forecast data keys: {list(forecast_data.keys())}")
+            
+            # Format forecast as text - more robust implementation
+            result = f"{days}-Day Weather Forecast for {formatted_city}:\n\n"
+            
+            # If 'location' and 'forecast' keys exist
+            if 'location' in forecast_data and 'forecast' in forecast_data:
+                location_name = forecast_data['location']
+                result = f"{days}-Day Weather Forecast for {location_name}:\n\n"
+                
+                for day in forecast_data['forecast']:
+                    result += f"{day['date']}: {day['condition']}, High: {day['temperature_high']}°C, Low: {day['temperature_low']}°C\n"
+            # Handle different structure (server-side changes)
+            elif isinstance(forecast_data, dict) and 'content' in forecast_data:
+                # Possible MCP server structure
+                if isinstance(forecast_data['content'], list) and len(forecast_data['content']) > 0:
+                    result += forecast_data['content'][0].get('text', 'Forecast details not available')
+                else:
+                    result += str(forecast_data['content'])
+            # Handle simple text
+            else:
+                result += f"Raw forecast data: {str(forecast_data)}"
             
             return result
         except Exception as e:
             logger.error(f"[AsyncMCPWeatherAgent] Error getting weather forecast from MCP for '{city}': {e}")
+            logger.error(f"[AsyncMCPWeatherAgent] Exception details: {str(e.__class__.__name__)} - {str(e)}")
             return f"Sorry, I couldn't get the weather forecast for {city}. Available cities are: London, Paris, New York, Tokyo, Sydney." 
