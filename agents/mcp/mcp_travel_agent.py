@@ -434,15 +434,21 @@ class AsyncMCPTravelAgent(FastAPIAgent):
             if city in query.lower():
                 return city.title()
         
+        # Log when no city is found
+        logger.info(f"[AsyncMCPTravelAgent] No location found in query: '{query}', using default")
+        
         # Default to London if no city found
         return "London"
     
     async def _get_weather_for_location(self, location: str) -> str:
         """Get weather information for a location from the weather agent"""
+        logger.info(f"[AsyncMCPTravelAgent] Getting weather for location: '{location}'")
         try:
             # Call the weather agent
             weather_query = f"What's the weather in {location}?"
-            return await self.call_agent("weather", weather_query)
+            weather_response = await self.call_agent("weather", weather_query)
+            logger.info(f"[AsyncMCPTravelAgent] Received weather response for {location}: {weather_response[:100]}...")
+            return weather_response
         except Exception as e:
             logger.error(f"[AsyncMCPTravelAgent] Error getting weather for {location}: {e}")
             return f"Unable to retrieve weather for {location} at this time."
@@ -459,15 +465,25 @@ class AsyncMCPTravelAgent(FastAPIAgent):
             Trip plan
         """
         # Get weather forecast from weather agent
-        weather_query = f"What's the weather forecast for {location} for the next {days} days?"
+        logger.info(f"[AsyncMCPTravelAgent] Planning {days}-day trip to {location}")
+        
+        # Format the city name (capitalize first letter, lowercase the rest)
+        formatted_location = location.strip().title()
+        logger.info(f"[AsyncMCPTravelAgent] Formatted location name: {formatted_location}")
+        
+        weather_query = f"What's the weather forecast for {formatted_location} for the next {days} days?"
+        logger.info(f"[AsyncMCPTravelAgent] Querying weather agent with: '{weather_query}'")
+        
         try:
             weather_forecast = await self.call_agent("weather", weather_query)
+            logger.info(f"[AsyncMCPTravelAgent] Successfully received weather forecast for {formatted_location}")
         except Exception as e:
             logger.error(f"[AsyncMCPTravelAgent] Error getting weather forecast: {e}")
+            logger.error(f"[AsyncMCPTravelAgent] Exception details: {str(e.__class__.__name__)} - {str(e)}")
             weather_forecast = "Weather forecast unavailable"
         
         # Generate trip plan based on weather and destination
-        trip_plan = f"🧳 {days}-Day Trip Plan for {location} 🧳\n\n"
+        trip_plan = f"🧳 {days}-Day Trip Plan for {formatted_location} 🧳\n\n"
         trip_plan += f"Weather Forecast: {weather_forecast}\n\n"
         
         # Add day-by-day itinerary (simplified example)
@@ -497,13 +513,16 @@ class AsyncMCPTravelAgent(FastAPIAgent):
         Returns:
             Activity suggestions
         """
+        logger.info(f"[AsyncMCPTravelAgent] Suggesting activities for {location}")
+        
         # Get weather if not provided
         if weather_condition is None:
             weather_query = f"What's the current weather in {location}?"
             try:
                 weather_condition = await self.call_agent("weather", weather_query)
+                logger.info(f"[AsyncMCPTravelAgent] Got weather condition for activities: {weather_condition[:100]}...")
             except Exception as e:
-                logger.error(f"[AsyncMCPTravelAgent] Error getting weather: {e}")
+                logger.error(f"[AsyncMCPTravelAgent] Error getting weather for activities: {e}")
                 weather_condition = "Weather information unavailable"
         
         # Determine activity type based on weather
@@ -511,6 +530,9 @@ class AsyncMCPTravelAgent(FastAPIAgent):
                              ["sunny", "clear", "mild", "warm", "nice"])
         is_bad_weather = any(keyword in weather_condition.lower() for keyword in 
                             ["rain", "snow", "storm", "cold", "windy"])
+        
+        # Log the weather classification
+        logger.info(f"[AsyncMCPTravelAgent] Weather classification - Good: {is_good_weather}, Bad: {is_bad_weather}")
         
         # Generate activity suggestions
         suggestions = f"🌈 Activity Suggestions for {location} 🌈\n\n"
@@ -551,10 +573,13 @@ class AsyncMCPTravelAgent(FastAPIAgent):
         Returns:
             Travel advisory information
         """
+        logger.info(f"[AsyncMCPTravelAgent] Getting travel advisory for {location}")
+        
         # Get weather alerts from weather agent
         weather_query = f"Are there any weather alerts for {location}?"
         try:
             weather_alerts = await self.call_agent("weather", weather_query)
+            logger.info(f"[AsyncMCPTravelAgent] Received weather alerts for {location}")
         except Exception as e:
             logger.error(f"[AsyncMCPTravelAgent] Error getting weather alerts: {e}")
             weather_alerts = "Weather alert information unavailable"

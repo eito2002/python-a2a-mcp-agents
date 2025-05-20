@@ -49,16 +49,16 @@ python -m cli start-agent --agent mcp_travel --port 53543 --connect-to weather:5
 
 ```bash
 # MCP対応気象エージェントにクエリを送信
-python -m cli query --agent mcp_weather --agent-ports mcp_weather:53537 "Show me a weather map of London"
+python -m cli query "Show me a weather map of London" --agent mcp_weather --agent-ports mcp_weather:53537
 
 # MCP対応旅行エージェントにクエリを送信
-python -m cli query --agent mcp_travel --agent-ports mcp_travel:53543 "Plan a 3-day trip to Tokyo considering weather"
+python -m cli query "Plan a 3-day trip to Tokyo considering weather" --agent mcp_travel --agent-ports mcp_travel:53543
 ```
 
 または、最適なエージェントに自動的にルーティング：
 
 ```bash
-python -m cli query --agent-ports mcp_weather:53537 mcp_travel:53543 "What's the weather like in Tokyo?"
+python -m cli query "What's the weather like in Tokyo?" --agent-ports mcp_weather:53537 mcp_travel:53543
 ```
 
 ## 利用可能なエージェント
@@ -75,7 +75,7 @@ python -m cli query --agent-ports mcp_weather:53537 mcp_travel:53543 "What's the
 旅行エージェントは気象エージェントと連携して、最新の天気情報に基づいた旅行計画を提供します：
 
 ```bash
-python -m cli query --agent mcp_travel --agent-ports mcp_travel:53543 mcp_weather:53537 "Plan a weekend trip to London based on weather"
+python -m cli query "Plan a weekend trip to London based on weather" --agent mcp_travel --agent-ports mcp_travel:53543 mcp_weather:53537
 ```
 
 このクエリを処理するとき、旅行エージェントは：
