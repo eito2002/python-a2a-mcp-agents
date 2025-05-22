@@ -16,6 +16,7 @@ Agent Networkは、特殊化された複数のエージェントを調整し、M
 git clone git@github.com:eito2002/python-a2a-mcp-agents.git
 cd python-a2a-mcp-agents
 
+# 仮想環境を起動
 uv venv
 source .venv/bin/activate
 # 依存関係をインストール
