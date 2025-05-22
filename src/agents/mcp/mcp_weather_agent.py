@@ -2,14 +2,19 @@
 FastAPI based MCP-enabled weather agent implementation.
 """
 
-import asyncio
 import json
-import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, Optional
 
-from python_a2a import (AgentCard, AgentSkill, Message, MessageRole, Task,
-                        TaskState, TaskStatus, TextContent)
-from python_a2a.models import FunctionCallContent, FunctionResponseContent
+from python_a2a import (
+    AgentCard,
+    AgentSkill,
+    Message,
+    MessageRole,
+    Task,
+    TaskState,
+    TaskStatus,
+    TextContent,
+)
 
 from agents.mcp.mcp_agent import BaseMCPAgent
 from config import logger
@@ -210,7 +215,7 @@ class MCPWeatherAgent(BaseMCPAgent):
         # Default response
         return Message(
             content=TextContent(
-                text=f"I'm a weather agent. You can ask about weather conditions, forecasts, or request weather maps."
+                text="I'm a weather agent. You can ask about weather conditions, forecasts, or request weather maps."
             ),
             role=MessageRole.AGENT,
             parent_message_id=message.message_id,
@@ -238,9 +243,7 @@ class MCPWeatherAgent(BaseMCPAgent):
         if "map" in query.lower():
             try:
                 city = self._extract_city(query)
-                logger.info(
-                    f"[MCPWeatherAgent] Generating weather map for {city}..."
-                )
+                logger.info(f"[MCPWeatherAgent] Generating weather map for {city}...")
 
                 # Generate weather map using MCP tool
                 map_data = await self.call_mcp_tool(

@@ -4,8 +4,6 @@ Keyword-based router implementation.
 
 import random
 
-from config import logger
-
 
 class KeywordRouter:
     """Router that uses simple keyword matching to route queries."""
