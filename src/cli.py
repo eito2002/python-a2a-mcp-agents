@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 
 from python_a2a.models import Message, MessageRole, TextContent
 
-from agents import AsyncMCPTravelAgent, AsyncMCPWeatherAgent
+from agents import MCPTravelAgent, MCPWeatherAgent
 from client import A2ANetworkClient
 from config import logger
 from server import AgentServer
@@ -37,7 +37,7 @@ MCP_AGENT_CONFIGS = [
     {
         "name": "mcp_weather",
         "class_module": "agents.mcp.mcp_weather_agent",
-        "class_name": "AsyncMCPWeatherAgent",
+        "class_name": "MCPWeatherAgent",
         "mcp_servers": {
             "weather": "http://localhost:5001",
             "maps": "http://localhost:5002",
@@ -46,7 +46,7 @@ MCP_AGENT_CONFIGS = [
     {
         "name": "mcp_travel",
         "class_module": "agents.mcp.mcp_travel_agent",
-        "class_name": "AsyncMCPTravelAgent",
+        "class_name": "MCPTravelAgent",
         "mcp_servers": {
             "travel": "http://localhost:5003",
             "maps": "http://localhost:5002",

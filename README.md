@@ -13,11 +13,52 @@ Agent Networkは、特殊化された複数のエージェントを調整し、M
 
 ```bash
 # リポジトリをクローン
-git clone https://github.com/yourusername/agent_network.git
-cd agent_network
+git clone git@github.com:eito2002/python-a2a-mcp-agents.git
+cd python-a2a-mcp-agents
 
+# 仮想環境を起動
+uv venv
+source .venv/bin/activate
 # 依存関係をインストール
-pip install -r requirements.txt
+uv pip install -e .
+# または開発用依存関係も含めてインストール
+uv pip install -e ".[dev]"
+```
+
+## プロジェクト構造
+
+```
+/
+├── src/                       # ソースコード（パッケージ）
+│   ├── agents/                # エージェント実装
+│   │   ├── __init__.py        # エージェントモジュール初期化
+│   │   ├── mcp/               # MCP対応エージェント実装
+│   │   │   ├── __init__.py    # MCPエージェントモジュール初期化
+│   │   │   ├── mcp_agent.py   # MCPエージェント基底クラス
+│   │   │   ├── mcp_weather_agent.py # MCP対応天気エージェント
+│   │   │   └── mcp_travel_agent.py # MCP対応旅行エージェント
+│   ├── mcp_servers/           # MCPサーバー実装
+│   │   ├── weather_mcp_server.py  # 天気情報MCPサーバー
+│   │   ├── maps_mcp_server.py     # 地図生成MCPサーバー
+│   │   └── travel_mcp_server.py   # 旅行情報MCPサーバー
+│   ├── server/                # サーバー管理
+│   │   ├── __init__.py        # サーバーモジュール初期化
+│   │   └── agent_server.py    # エージェントサーバー管理クラス
+│   ├── routing/               # クエリルーティング
+│   │   ├── __init__.py        # ルーティングモジュール初期化
+│   │   ├── keyword_router.py  # キーワードベースルーター
+│   │   └── ai_router.py       # AIベースルーター
+│   ├── utils/                 # ユーティリティ関数
+│   │   ├── __init__.py        # ユーティリティモジュール初期化
+│   │   └── network_utils.py   # ネットワークユーティリティ
+│   ├── __init__.py            # パッケージ初期化
+│   ├── __main__.py            # メインエントリーポイント
+│   ├── cli.py                 # コマンドラインインターフェース
+│   ├── client.py              # ネットワーククライアント
+│   ├── config.py              # 設定とロギング
+│   └── network.py             # エージェントネットワーク管理
+├── pyproject.toml             # プロジェクト設定
+└── README.md                  # プロジェクト説明
 ```
 
 ## 使用方法
@@ -28,14 +69,14 @@ MCP対応エージェントを使用するには、まずMCPサーバーを起�
 
 ```bash
 # ステップ1: まずMCPサーバーを起動
-python -m cli mcp
+python -m src.cli mcp
 
 # ステップ2: 各エージェントを別々のターミナルで起動
 # ターミナル1: 天気エージェントを固定ポートで起動
-python -m cli start-agent --agent mcp_weather --port 53537
+python -m src.cli start-agent --agent mcp_weather --port 53537
 
 # ターミナル2: 旅行エージェントを起動し、天気エージェントに接続
-python -m cli start-agent --agent mcp_travel --port 53543 --connect-to weather:53537
+python -m src.cli start-agent --agent mcp_travel --port 53543 --connect-to weather:53537
 ```
 
 この方法により、エージェント間の接続を確実に行えます：
@@ -49,16 +90,16 @@ python -m cli start-agent --agent mcp_travel --port 53543 --connect-to weather:5
 
 ```bash
 # MCP対応気象エージェントにクエリを送信
-python -m cli query "Show me a weather map of London" --agent mcp_weather --agent-ports mcp_weather:53537
+python -m src.cli query "Show me a weather map of London" --agent mcp_weather --agent-ports mcp_weather:53537
 
 # MCP対応旅行エージェントにクエリを送信
-python -m cli query "Plan a 3-day trip to Tokyo considering weather" --agent mcp_travel --agent-ports mcp_travel:53543
+python -m src.cli query "Plan a 3-day trip to Tokyo considering weather" --agent mcp_travel --agent-ports mcp_travel:53543
 ```
 
 または、最適なエージェントに自動的にルーティング：
 
 ```bash
-python -m cli query "What's the weather like in Tokyo?" --agent-ports mcp_weather:53537 mcp_travel:53543
+python -m src.cli query "What's the weather like in Tokyo?" --agent-ports mcp_weather:53537 mcp_travel:53543
 ```
 
 ## 利用可能なエージェント
@@ -75,7 +116,7 @@ python -m cli query "What's the weather like in Tokyo?" --agent-ports mcp_weathe
 旅行エージェントは気象エージェントと連携して、最新の天気情報に基づいた旅行計画を提供します：
 
 ```bash
-python -m cli query "Plan a weekend trip to London based on weather" --agent mcp_travel --agent-ports mcp_travel:53543 mcp_weather:53537
+python -m src.cli query "Plan a weekend trip to London based on weather" --agent mcp_travel --agent-ports mcp_travel:53543 mcp_weather:53537
 ```
 
 このクエリを処理するとき、旅行エージェントは：
@@ -127,6 +168,14 @@ MCPサーバーは、特定の機能やツールを提供する独立したサ�
 1. `FastMCP`を使用して新しいMCPサーバーを作成
 2. ツールとリソースを関数デコレータで定義
 3. `cli.py`の設定に追加する
+
+## 依存関係
+
+- python-a2a: エージェント間通信の基盤
+- asyncio: 非同期処理のサポート
+- fastapi: FastAPIベースのエージェントのためのWebフレームワーク
+- uvicorn: ASGI サーバー
+- multiprocessing: MCPサーバーの並列実行
 
 ## ライセンス
 
