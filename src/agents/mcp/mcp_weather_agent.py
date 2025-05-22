@@ -430,11 +430,63 @@ class MCPWeatherAgent(BaseMCPAgent):
                 location=formatted_city,
             )
 
+            # Debug log the raw response
+            logger.debug(f"[MCPWeatherAgent] Raw MCP response: {weather_json[:200]}...")
+
             # Parse JSON response
             weather_data = json.loads(weather_json)
             logger.info(
                 f"[MCPWeatherAgent] Successfully received weather data for {formatted_city}"
             )
+
+            # Check if response contains content (MCP servers might wrap responses)
+            if isinstance(weather_data, dict) and "content" in weather_data:
+                if (
+                    isinstance(weather_data["content"], list)
+                    and len(weather_data["content"]) > 0
+                ):
+                    # Extract the first content item's text
+                    content_item = weather_data["content"][0]
+                    if isinstance(content_item, dict) and "text" in content_item:
+                        try:
+                            weather_data = json.loads(content_item["text"])
+                        except json.JSONDecodeError:
+                            # If not valid JSON, use as is
+                            return content_item["text"]
+                    else:
+                        return str(content_item)
+                elif isinstance(weather_data["content"], str):
+                    # Try to parse content as JSON
+                    try:
+                        weather_data = json.loads(weather_data["content"])
+                    except json.JSONDecodeError:
+                        return weather_data["content"]
+
+            # Now check if the expected keys exist
+            if "location" not in weather_data:
+                logger.error("[MCPWeatherAgent] Missing 'location' key in response")
+                weather_data["location"] = formatted_city
+
+            # Ensure all required fields exist
+            required_fields = [
+                "condition",
+                "temperature",
+                "temperature_unit",
+                "humidity",
+                "wind_speed",
+                "wind_unit",
+            ]
+            for field in required_fields:
+                if field not in weather_data:
+                    logger.error(f"[MCPWeatherAgent] Missing '{field}' key in response")
+                    if field in ["condition"]:
+                        weather_data[field] = "Unknown"
+                    elif field in ["temperature", "humidity", "wind_speed"]:
+                        weather_data[field] = 0
+                    elif field in ["temperature_unit"]:
+                        weather_data[field] = "C"
+                    elif field in ["wind_unit"]:
+                        weather_data[field] = "km/h"
 
             # Format weather information
             return f"""Current Weather in {weather_data['location']}:
@@ -446,7 +498,8 @@ Wind Speed: {weather_data['wind_speed']} {weather_data['wind_unit']}"""
             logger.error(
                 f"[MCPWeatherAgent] Error getting current weather from MCP for '{city}': {e}"
             )
-            return f"Sorry, I couldn't get the current weather information for {city}. Available cities are: London, Paris, New York, Tokyo, Sydney."
+            logger.exception("Detailed exception information:")
+            return f"Sorry, I couldn't get the current weather information for {city}. The MCP service might be unavailable."
 
     async def _get_weather_forecast_from_mcp(self, city: str, days: int = 3) -> str:
         """Get weather forecast for a city from MCP server"""
@@ -464,44 +517,85 @@ Wind Speed: {weather_data['wind_speed']} {weather_data['wind_unit']}"""
                 days=days,
             )
 
+            # Debug log the raw response
+            logger.debug(
+                f"[MCPWeatherAgent] Raw MCP forecast response: {forecast_json[:200]}..."
+            )
+
             # Parse JSON response
             forecast_data = json.loads(forecast_json)
             logger.info(
                 f"[MCPWeatherAgent] Successfully received forecast data for {formatted_city}"
             )
 
-            # Format forecast as text
-            result = f"{days}-Day Weather Forecast for {formatted_city}:\n\n"
-
-            # If 'location' and 'forecast' keys exist
-            if "location" in forecast_data and "forecast" in forecast_data:
-                location_name = forecast_data["location"]
-                result = f"{days}-Day Weather Forecast for {location_name}:\n\n"
-
-                for day in forecast_data["forecast"]:
-                    result += f"{day['date']}: {day['condition']}, High: {day['temperature_high']}°C, Low: {day['temperature_low']}°C\n"
-            # Handle different structure (server-side changes)
-            elif isinstance(forecast_data, dict) and "content" in forecast_data:
-                # Possible MCP server structure
+            # Check if response contains content (MCP servers might wrap responses)
+            if isinstance(forecast_data, dict) and "content" in forecast_data:
                 if (
                     isinstance(forecast_data["content"], list)
                     and len(forecast_data["content"]) > 0
                 ):
-                    result += forecast_data["content"][0].get(
-                        "text", "Forecast details not available"
-                    )
-                else:
-                    result += str(forecast_data["content"])
-            # Handle simple text
+                    # Extract the first content item's text
+                    content_item = forecast_data["content"][0]
+                    if isinstance(content_item, dict) and "text" in content_item:
+                        try:
+                            forecast_data = json.loads(content_item["text"])
+                        except json.JSONDecodeError:
+                            # If not valid JSON, use as is
+                            return content_item["text"]
+                    else:
+                        return str(content_item)
+                elif isinstance(forecast_data["content"], str):
+                    # Try to parse content as JSON
+                    try:
+                        forecast_data = json.loads(forecast_data["content"])
+                    except json.JSONDecodeError:
+                        return forecast_data["content"]
+
+            # Format forecast as text
+            result = f"{days}-Day Weather Forecast for {formatted_city}:\n\n"
+
+            # Check if the expected keys exist
+            if "location" not in forecast_data:
+                logger.error(
+                    "[MCPWeatherAgent] Missing 'location' key in forecast response"
+                )
+                forecast_data["location"] = formatted_city
+
+            # If 'forecast' key exists and is well-formed
+            if "forecast" in forecast_data and isinstance(
+                forecast_data["forecast"], list
+            ):
+                location_name = forecast_data["location"]
+                result = f"{days}-Day Weather Forecast for {location_name}:\n\n"
+
+                for day in forecast_data["forecast"]:
+                    # Check if day has all required fields
+                    if not all(
+                        k in day
+                        for k in [
+                            "date",
+                            "condition",
+                            "temperature_high",
+                            "temperature_low",
+                        ]
+                    ):
+                        logger.warning(
+                            f"[MCPWeatherAgent] Day missing required fields: {day}"
+                        )
+                        continue
+
+                    result += f"{day['date']}: {day['condition']}, High: {day['temperature_high']}°C, Low: {day['temperature_low']}°C\n"
+            # Handle different structure (server-side changes)
             else:
-                result += f"Raw forecast data: {str(forecast_data)}"
+                logger.warning(
+                    "[MCPWeatherAgent] Missing or invalid 'forecast' key in response"
+                )
+                result += f"Unable to process forecast data for {formatted_city}. Format not recognized."
 
             return result
         except Exception as e:
             logger.error(
                 f"[MCPWeatherAgent] Error getting weather forecast from MCP for '{city}': {e}"
             )
-            logger.error(
-                f"[MCPWeatherAgent] Exception details: {str(e.__class__.__name__)} - {str(e)}"
-            )
-            return f"Sorry, I couldn't get the weather forecast for {city}. Available cities are: London, Paris, New York, Tokyo, Sydney."
+            logger.exception("Detailed exception information:")
+            return f"Sorry, I couldn't get the weather forecast for {city}. The MCP service might be unavailable."

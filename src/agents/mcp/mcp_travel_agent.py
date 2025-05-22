@@ -3,7 +3,9 @@ FastAPI based MCP-enabled travel agent implementation with weather agent integra
 """
 
 import time
+import json
 from typing import Dict, Optional
+from datetime import datetime
 
 from python_a2a import (
     AgentCard,
@@ -225,6 +227,9 @@ class MCPTravelAgent(BaseMCPAgent):
         elif function_name == "get_travel_advisory":
             location = params.get("location", "London")
             return await self._get_travel_advisory(location)
+        elif function_name == "get_destination_info":
+            location = params.get("location", "London")
+            return await self._get_destination_info(location)
         else:
             raise ValueError(f"Unknown function: {function_name}")
 
@@ -361,17 +366,32 @@ class MCPTravelAgent(BaseMCPAgent):
         ):
             return await self._get_travel_advisory(location)
 
-        else:
-            # Generic travel information
-            # First, get weather for the location
-            weather_info = await self._get_weather_for_location(location)
+        elif any(
+            keyword in query.lower()
+            for keyword in ["info", "information", "tell me about", "details"]
+        ):
+            return await self._get_destination_info(location)
 
-            # Then, provide basic travel info with weather
-            return (
-                f"Here's some information about traveling to {location}:\n\n"
-                f"Weather: {weather_info}\n\n"
-                f"For a more specific response, try asking about planning a trip, recommended activities, or travel advisories for {location}."
-            )
+        else:
+            try:
+                # First, get weather for the location
+                weather_info = await self._get_weather_for_location(location)
+
+                # Get destination information from MCP
+                destination_info = await self._get_destination_info_summary(location)
+
+                # Then, provide basic travel info with weather
+                return (
+                    f"Here's some information about traveling to {location}:\n\n"
+                    f"Weather: {weather_info}\n\n"
+                    f"{destination_info}\n\n"
+                    f"For a more specific response, try asking about planning a trip, recommended activities, or travel advisories for {location}."
+                )
+            except Exception as e:
+                logger.error(
+                    f"[MCPTravelAgent] Error processing general travel query: {e}"
+                )
+                return f"Sorry, I couldn't get travel information for {location}. The MCP service might be unavailable."
 
     def _extract_location(self, query: str) -> str:
         """Extract location from query (simplified implementation)"""
@@ -395,16 +415,223 @@ class MCPTravelAgent(BaseMCPAgent):
         """Get weather information for a location from the weather agent"""
         logger.info(f"[MCPTravelAgent] Getting weather for location: '{location}'")
         try:
+            # Format the location name properly
+            formatted_location = location.strip().title()
+
             # Call the weather agent
-            weather_query = f"What's the weather in {location}?"
-            weather_response = await self.call_agent("weather", weather_query)
+            weather_query = f"What's the weather in {formatted_location}?"
             logger.info(
-                f"[MCPTravelAgent] Received weather response for {location}: {weather_response[:100]}..."
+                f"[MCPTravelAgent] Querying weather agent with: '{weather_query}'"
             )
-            return weather_response
+
+            weather_response = await self.call_agent("weather", weather_query)
+
+            if weather_response:
+                logger.info(
+                    f"[MCPTravelAgent] Received weather response for {formatted_location}: {weather_response[:100]}..."
+                )
+                return weather_response
+            else:
+                logger.warning(
+                    f"[MCPTravelAgent] Empty weather response for {formatted_location}"
+                )
+                return f"Weather information for {formatted_location} is currently unavailable."
+
         except Exception as e:
             logger.error(f"[MCPTravelAgent] Error getting weather for {location}: {e}")
-            return f"Unable to retrieve weather for {location} at this time."
+            logger.exception("Detailed exception information:")
+            return f"Unable to retrieve weather for {location} at this time. The weather service might be unavailable."
+
+    async def _get_destination_info(self, location: str) -> str:
+        """
+        Get comprehensive destination information from MCP server
+
+        Args:
+            location: Destination name
+
+        Returns:
+            Formatted destination information
+        """
+        logger.info(f"[MCPTravelAgent] Getting destination information for {location}")
+        try:
+            # Call MCP tool to get destination information
+            dest_json = await self.call_mcp_tool(
+                server_name="travel",
+                tool_name="get_destination_info",
+                location=location,
+            )
+
+            # Debug log the raw response
+            logger.debug(
+                f"[MCPTravelAgent] Raw MCP destination info response: {dest_json[:200]}..."
+            )
+
+            # Parse JSON response
+            dest_data = json.loads(dest_json)
+            logger.info(
+                f"[MCPTravelAgent] Successfully received destination data for {location}"
+            )
+
+            # Check if response contains content (MCP servers might wrap responses)
+            if isinstance(dest_data, dict) and "content" in dest_data:
+                if (
+                    isinstance(dest_data["content"], list)
+                    and len(dest_data["content"]) > 0
+                ):
+                    # Extract the first content item's text
+                    content_item = dest_data["content"][0]
+                    if isinstance(content_item, dict) and "text" in content_item:
+                        try:
+                            dest_data = json.loads(content_item["text"])
+                        except json.JSONDecodeError:
+                            # If not valid JSON, use as is
+                            return content_item["text"]
+                    else:
+                        return str(content_item)
+                elif isinstance(dest_data["content"], str):
+                    # Try to parse content as JSON
+                    try:
+                        dest_data = json.loads(dest_data["content"])
+                    except json.JSONDecodeError:
+                        return dest_data["content"]
+
+            # Now check if the expected keys exist
+            if "location" not in dest_data:
+                logger.error(
+                    "[MCPTravelAgent] Missing 'location' key in destination info response"
+                )
+                dest_data["location"] = location.strip().title()
+
+            # Check for required data sections
+            required_sections = [
+                "attractions",
+                "indoor_activities",
+                "outdoor_activities",
+                "cuisines",
+                "transportation",
+                "language",
+                "currency",
+                "timezone",
+            ]
+
+            for section in required_sections:
+                if section not in dest_data:
+                    logger.error(
+                        f"[MCPTravelAgent] Missing '{section}' in destination info"
+                    )
+                    if section in ["language", "currency", "timezone"]:
+                        dest_data[section] = "Information not available"
+                    else:
+                        dest_data[section] = ["Information not available"]
+
+            if "safety_level" not in dest_data:
+                dest_data["safety_level"] = "Information not available"
+
+            # Format destination information
+            result = f"📍 Destination Guide: {dest_data['location']} 📍\n\n"
+
+            result += "🏛️ Top Attractions:\n"
+            for attraction in dest_data["attractions"]:
+                result += f"  • {attraction}\n"
+
+            result += "\n🏠 Indoor Activities:\n"
+            for activity in dest_data["indoor_activities"]:
+                result += f"  • {activity}\n"
+
+            result += "\n🌳 Outdoor Activities:\n"
+            for activity in dest_data["outdoor_activities"]:
+                result += f"  • {activity}\n"
+
+            result += "\n🍽️ Local Cuisine: " + ", ".join(dest_data["cuisines"]) + "\n"
+            result += (
+                "🚌 Getting Around: " + ", ".join(dest_data["transportation"]) + "\n"
+            )
+            result += f"🗣️ Language: {dest_data['language']}\n"
+            result += f"💰 Currency: {dest_data['currency']}\n"
+            result += f"🕒 Timezone: {dest_data['timezone']}\n"
+            result += f"🛡️ Safety Level: {dest_data['safety_level']}\n"
+
+            return result
+        except Exception as e:
+            logger.error(
+                f"[MCPTravelAgent] Error getting destination info from MCP: {e}"
+            )
+            logger.exception("Detailed exception information:")
+            return f"Error: Unable to retrieve destination information for {location}. The MCP service might be unavailable."
+
+    async def _get_destination_info_summary(self, location: str) -> str:
+        """
+        Get summary destination information from MCP server (shorter version)
+
+        Args:
+            location: Destination name
+
+        Returns:
+            Summarized destination information
+        """
+        try:
+            # Call MCP tool to get destination information
+            dest_json = await self.call_mcp_tool(
+                server_name="travel",
+                tool_name="get_destination_info",
+                location=location,
+            )
+
+            # Parse JSON response
+            dest_data = json.loads(dest_json)
+
+            # Check if response contains content (MCP servers might wrap responses)
+            if isinstance(dest_data, dict) and "content" in dest_data:
+                if (
+                    isinstance(dest_data["content"], list)
+                    and len(dest_data["content"]) > 0
+                ):
+                    # Extract the first content item's text
+                    content_item = dest_data["content"][0]
+                    if isinstance(content_item, dict) and "text" in content_item:
+                        try:
+                            dest_data = json.loads(content_item["text"])
+                        except json.JSONDecodeError:
+                            # Cannot parse summary, raise exception
+                            raise ValueError("Cannot parse destination data")
+                    else:
+                        raise ValueError("Invalid content format")
+                elif isinstance(dest_data["content"], str):
+                    # Try to parse content as JSON
+                    try:
+                        dest_data = json.loads(dest_data["content"])
+                    except json.JSONDecodeError:
+                        raise ValueError("Cannot parse destination data content")
+
+            # Validate required fields
+            if "location" not in dest_data:
+                dest_data["location"] = location.strip().title()
+
+            if "attractions" not in dest_data or not isinstance(
+                dest_data["attractions"], list
+            ):
+                dest_data["attractions"] = ["Information not available"]
+
+            if "language" not in dest_data:
+                dest_data["language"] = "Information not available"
+
+            if "currency" not in dest_data:
+                dest_data["currency"] = "Information not available"
+
+            # Create a shorter summary
+            summary = f"Destination Overview: {dest_data['location']}\n"
+            summary += (
+                f"Top attractions include {', '.join(dest_data['attractions'][:3])}\n"
+            )
+            summary += f"Local language: {dest_data['language']}, Currency: {dest_data['currency']}"
+
+            return summary
+        except Exception as e:
+            logger.error(
+                f"[MCPTravelAgent] Error getting destination summary from MCP: {e}"
+            )
+            logger.exception("Detailed exception information:")
+            raise e  # Re-throw the exception to be handled by the caller
 
     async def _plan_trip(self, location: str, days: int) -> str:
         """
@@ -424,10 +651,12 @@ class MCPTravelAgent(BaseMCPAgent):
         formatted_location = location.strip().title()
         logger.info(f"[MCPTravelAgent] Formatted location name: {formatted_location}")
 
-        weather_query = f"What's the weather forecast for {formatted_location} for the next {days} days?"
-        logger.info(f"[MCPTravelAgent] Querying weather agent with: '{weather_query}'")
-
+        # Get weather forecast from weather agent
         try:
+            weather_query = f"What's the weather forecast for {formatted_location} for the next {days} days?"
+            logger.info(
+                f"[MCPTravelAgent] Querying weather agent with: '{weather_query}'"
+            )
             weather_forecast = await self.call_agent("weather", weather_query)
             logger.info(
                 f"[MCPTravelAgent] Successfully received weather forecast for {formatted_location}"
@@ -439,28 +668,161 @@ class MCPTravelAgent(BaseMCPAgent):
             )
             weather_forecast = "Weather forecast unavailable"
 
-        # Generate trip plan based on weather and destination
-        trip_plan = f"🧳 {days}-Day Trip Plan for {formatted_location} 🧳\n\n"
-        trip_plan += f"Weather Forecast: {weather_forecast}\n\n"
+        # Get trip itinerary from MCP server with weather consideration
+        try:
+            # Extract weather condition (simplified)
+            weather_condition = None
+            if weather_forecast != "Weather forecast unavailable":
+                if "rain" in weather_forecast.lower():
+                    weather_condition = "Rainy"
+                elif (
+                    "sun" in weather_forecast.lower()
+                    or "clear" in weather_forecast.lower()
+                ):
+                    weather_condition = "Sunny"
 
-        # Add day-by-day itinerary (simplified example)
-        for day in range(1, days + 1):
-            trip_plan += f"Day {day}:\n"
-            if (
-                "rain" in weather_forecast.lower()
-                or "rainy" in weather_forecast.lower()
-            ):
-                trip_plan += "  - Morning: Visit a museum or gallery\n"
-                trip_plan += "  - Afternoon: Indoor shopping or local cafes\n"
-                trip_plan += "  - Evening: Enjoy local cuisine at a restaurant\n"
-            else:
-                trip_plan += "  - Morning: Explore city landmarks\n"
-                trip_plan += "  - Afternoon: Park visit or outdoor activities\n"
-                trip_plan += "  - Evening: Sunset walk and dinner\n"
-            trip_plan += "\n"
+            # Call MCP tool to create trip itinerary
+            itinerary_json = await self.call_mcp_tool(
+                server_name="travel",
+                tool_name="create_trip_itinerary",
+                location=formatted_location,
+                days=days,
+                weather_condition=weather_condition,
+            )
 
-        trip_plan += "This plan adapts to weather conditions to ensure you have the best experience!"
-        return trip_plan
+            # Debug log the raw response
+            logger.debug(
+                f"[MCPTravelAgent] Raw MCP response: {itinerary_json[:200]}..."
+            )
+
+            # Parse JSON response
+            itinerary_data = json.loads(itinerary_json)
+            logger.info(
+                f"[MCPTravelAgent] Successfully received itinerary for {formatted_location}"
+            )
+
+            # Check if response contains content (MCP servers might wrap responses)
+            if isinstance(itinerary_data, dict) and "content" in itinerary_data:
+                if (
+                    isinstance(itinerary_data["content"], list)
+                    and len(itinerary_data["content"]) > 0
+                ):
+                    # Extract the first content item's text
+                    content_item = itinerary_data["content"][0]
+                    if isinstance(content_item, dict) and "text" in content_item:
+                        # If it's a JSON string, parse it
+                        try:
+                            itinerary_data = json.loads(content_item["text"])
+                        except json.JSONDecodeError:
+                            # If not valid JSON, use as is
+                            return content_item["text"]
+                    else:
+                        return str(content_item)
+                elif isinstance(itinerary_data["content"], str):
+                    # If content is a string, try to parse as JSON
+                    try:
+                        itinerary_data = json.loads(itinerary_data["content"])
+                    except json.JSONDecodeError:
+                        # If not valid JSON, use as is
+                        return itinerary_data["content"]
+
+            # Now check if the expected keys exist
+            if "location" not in itinerary_data:
+                logger.error(
+                    f"[MCPTravelAgent] Missing 'location' key in response: {str(itinerary_data)[:200]}..."
+                )
+                itinerary_data["location"] = formatted_location
+
+            if "weather_consideration" not in itinerary_data:
+                itinerary_data["weather_consideration"] = (
+                    weather_condition or "Not specified"
+                )
+
+            if "itinerary" not in itinerary_data:
+                logger.error("[MCPTravelAgent] Missing 'itinerary' key in response")
+                return (
+                    f"Error: Invalid response format from MCP service for {location}."
+                )
+
+            if "tips" not in itinerary_data:
+                itinerary_data["tips"] = [
+                    "Check local weather before heading out",
+                    "Research local customs and traditions",
+                    "Have emergency contacts saved",
+                ]
+
+            # Format the itinerary
+            trip_plan = (
+                f"🧳 {days}-Day Trip Plan for {itinerary_data['location']} 🧳\n\n"
+            )
+            trip_plan += (
+                f"Weather Consideration: {itinerary_data['weather_consideration']}\n\n"
+            )
+
+            # Add daily itinerary
+            for day in itinerary_data["itinerary"]:
+                # Verify day has required fields
+                if not all(
+                    k in day for k in ["day", "date", "morning", "afternoon", "evening"]
+                ):
+                    logger.warning(
+                        f"[MCPTravelAgent] Day missing required fields: {day}"
+                    )
+                    continue
+
+                trip_plan += f"Day {day['day']} ({day['date']}):\n"
+
+                # Handle morning activities safely
+                if (
+                    isinstance(day.get("morning"), dict)
+                    and "activity" in day["morning"]
+                ):
+                    activity_type = day["morning"].get("type", "activity")
+                    trip_plan += (
+                        f"  - Morning: {day['morning']['activity']} ({activity_type})\n"
+                    )
+                else:
+                    trip_plan += "  - Morning: Free time\n"
+
+                # Handle afternoon activities safely
+                if (
+                    isinstance(day.get("afternoon"), dict)
+                    and "activity" in day["afternoon"]
+                ):
+                    activity_type = day["afternoon"].get("type", "activity")
+                    trip_plan += f"  - Afternoon: {day['afternoon']['activity']} ({activity_type})\n"
+                else:
+                    trip_plan += "  - Afternoon: Free time\n"
+
+                # Handle evening activities safely
+                if (
+                    isinstance(day.get("evening"), dict)
+                    and "activity" in day["evening"]
+                ):
+                    trip_plan += f"  - Evening: {day['evening']['activity']}\n"
+                elif isinstance(day.get("evening"), str):
+                    trip_plan += f"  - Evening: {day['evening']}\n"
+                else:
+                    trip_plan += "  - Evening: Free time\n"
+
+                # Add transportation tip if available
+                if "transportation_tip" in day:
+                    trip_plan += f"  - {day['transportation_tip']}\n"
+
+                trip_plan += "\n"
+
+            # Add tips
+            trip_plan += "Tips:\n"
+            for tip in itinerary_data["tips"]:
+                trip_plan += f"  • {tip}\n"
+
+            return trip_plan
+        except Exception as e:
+            logger.error(
+                f"[MCPTravelAgent] Error creating trip itinerary from MCP: {e}"
+            )
+            logger.exception("Detailed exception information:")
+            return f"Error: Unable to plan a trip to {location}. The MCP service might be unavailable."
 
     async def _suggest_activities(
         self, location: str, weather_condition: Optional[str] = None
@@ -479,8 +841,8 @@ class MCPTravelAgent(BaseMCPAgent):
 
         # Get weather if not provided
         if weather_condition is None:
-            weather_query = f"What's the current weather in {location}?"
             try:
+                weather_query = f"What's the current weather in {location}?"
                 weather_condition = await self.call_agent("weather", weather_query)
                 logger.info(
                     f"[MCPTravelAgent] Got weather condition for activities: {weather_condition[:100]}..."
@@ -491,49 +853,108 @@ class MCPTravelAgent(BaseMCPAgent):
                 )
                 weather_condition = "Weather information unavailable"
 
-        # Determine activity type based on weather
-        is_good_weather = any(
-            keyword in weather_condition.lower()
-            for keyword in ["sunny", "clear", "mild", "warm", "nice"]
-        )
-        is_bad_weather = any(
-            keyword in weather_condition.lower()
-            for keyword in ["rain", "snow", "storm", "cold", "windy"]
-        )
+        # Use MCP tool to get activity suggestions based on weather
+        try:
+            # Format the location name
+            formatted_location = location.strip().title()
 
-        # Log the weather classification
-        logger.info(
-            f"[MCPTravelAgent] Weather classification - Good: {is_good_weather}, Bad: {is_bad_weather}"
-        )
+            # Call MCP tool for activity suggestions
+            activities_json = await self.call_mcp_tool(
+                server_name="travel",
+                tool_name="suggest_activities",
+                location=formatted_location,
+                weather_condition=weather_condition,
+            )
 
-        # Generate activity suggestions
-        suggestions = f"🌈 Activity Suggestions for {location} 🌈\n\n"
-        suggestions += f"Current Weather: {weather_condition}\n\n"
+            # Debug log the raw response
+            logger.debug(
+                f"[MCPTravelAgent] Raw MCP activities response: {activities_json[:200]}..."
+            )
 
-        if is_good_weather:
-            suggestions += "Outdoor Activities:\n"
-            suggestions += "  - City walking tour\n"
-            suggestions += "  - Visit to local parks\n"
-            suggestions += "  - Outdoor dining\n"
-            suggestions += "  - Sightseeing at landmarks\n"
-            suggestions += "  - Boat tour (if applicable)\n"
-        elif is_bad_weather:
-            suggestions += "Indoor Activities:\n"
-            suggestions += "  - Museum visits\n"
-            suggestions += "  - Shopping malls\n"
-            suggestions += "  - Indoor attractions\n"
-            suggestions += "  - Local cafes and restaurants\n"
-            suggestions += "  - Theater or cinema\n"
-        else:
-            # Neutral or unknown weather
-            suggestions += "Recommended Activities:\n"
-            suggestions += "  - Both indoor and outdoor options available\n"
-            suggestions += "  - Cultural venues\n"
-            suggestions += "  - Local cuisine exploration\n"
-            suggestions += "  - Landmark visits\n"
-            suggestions += "  - Shopping districts\n"
+            # Parse JSON response
+            activities_data = json.loads(activities_json)
+            logger.info(
+                f"[MCPTravelAgent] Successfully received activity suggestions for {formatted_location}"
+            )
 
-        return suggestions
+            # Check if response contains content (MCP servers might wrap responses)
+            if isinstance(activities_data, dict) and "content" in activities_data:
+                if (
+                    isinstance(activities_data["content"], list)
+                    and len(activities_data["content"]) > 0
+                ):
+                    # Extract the first content item's text
+                    content_item = activities_data["content"][0]
+                    if isinstance(content_item, dict) and "text" in content_item:
+                        try:
+                            activities_data = json.loads(content_item["text"])
+                        except json.JSONDecodeError:
+                            # If not valid JSON, use as is
+                            return content_item["text"]
+                    else:
+                        return str(content_item)
+                elif isinstance(activities_data["content"], str):
+                    # Try to parse content as JSON
+                    try:
+                        activities_data = json.loads(activities_data["content"])
+                    except json.JSONDecodeError:
+                        return activities_data["content"]
+
+            # Now check if the expected keys exist
+            if "location" not in activities_data:
+                logger.error(
+                    "[MCPTravelAgent] Missing 'location' key in activities response"
+                )
+                activities_data["location"] = formatted_location
+
+            if "weather_condition" not in activities_data:
+                activities_data["weather_condition"] = weather_condition
+
+            if "recommended_activity_type" not in activities_data:
+                activities_data["recommended_activity_type"] = "Recommended"
+
+            if (
+                "top_activities" not in activities_data
+                or not activities_data["top_activities"]
+            ):
+                logger.error("[MCPTravelAgent] Missing 'top_activities' in response")
+                return (
+                    f"Error: Invalid response format from MCP service for {location}."
+                )
+
+            # Format activity suggestions
+            suggestions = (
+                f"🌈 Activity Suggestions for {activities_data['location']} 🌈\n\n"
+            )
+            suggestions += f"Current Weather: {activities_data['weather_condition']}\n"
+            suggestions += f"Recommended: {activities_data['recommended_activity_type']} Activities\n\n"
+
+            suggestions += "Top Recommendations:\n"
+            for activity in activities_data["top_activities"]:
+                suggestions += f"  • {activity}\n"
+
+            # Check if all activities exist with correct key
+            activity_type_lower = activities_data["recommended_activity_type"].lower()
+            all_activities_key = f"all_{activity_type_lower}_options"
+
+            if (
+                all_activities_key in activities_data
+                and activities_data[all_activities_key]
+            ):
+                suggestions += f"\nAll {activity_type_lower} options:"
+                for i, activity in enumerate(activities_data[all_activities_key]):
+                    if i > 0:
+                        suggestions += f", {activity}"
+                    else:
+                        suggestions += f" {activity}"
+
+            return suggestions
+        except Exception as e:
+            logger.error(
+                f"[MCPTravelAgent] Error getting activity suggestions from MCP: {e}"
+            )
+            logger.exception("Detailed exception information:")
+            return f"Error: Unable to suggest activities for {location}. The MCP service might be unavailable."
 
     async def _get_travel_advisory(self, location: str) -> str:
         """
@@ -548,23 +969,103 @@ class MCPTravelAgent(BaseMCPAgent):
         logger.info(f"[MCPTravelAgent] Getting travel advisory for {location}")
 
         # Get weather alerts from weather agent
-        weather_query = f"Are there any weather alerts for {location}?"
         try:
+            weather_query = f"Are there any weather alerts for {location}?"
             weather_alerts = await self.call_agent("weather", weather_query)
             logger.info(f"[MCPTravelAgent] Received weather alerts for {location}")
         except Exception as e:
             logger.error(f"[MCPTravelAgent] Error getting weather alerts: {e}")
             weather_alerts = "Weather alert information unavailable"
 
-        # Generate travel advisory
-        advisory = f"🚨 Travel Advisory for {location} 🚨\n\n"
-        advisory += f"Weather Alerts: {weather_alerts}\n\n"
+        # Get travel advisories from MCP server
+        try:
+            # Format the location name
+            formatted_location = location.strip().title()
 
-        # Add generic travel advice (simplified example)
-        advisory += "General Travel Tips:\n"
-        advisory += "  - Always carry identification\n"
-        advisory += "  - Keep emergency contact information handy\n"
-        advisory += "  - Stay informed about local news\n"
-        advisory += "  - Follow local regulations and customs\n"
+            # Call MCP tool for travel advisories
+            advisory_json = await self.call_mcp_tool(
+                server_name="travel",
+                tool_name="get_travel_advisory",
+                location=formatted_location,
+            )
 
-        return advisory
+            # Debug log the raw response
+            logger.debug(
+                f"[MCPTravelAgent] Raw MCP advisory response: {advisory_json[:200]}..."
+            )
+
+            # Parse JSON response
+            advisory_data = json.loads(advisory_json)
+            logger.info(
+                f"[MCPTravelAgent] Successfully received travel advisory for {formatted_location}"
+            )
+
+            # Check if response contains content (MCP servers might wrap responses)
+            if isinstance(advisory_data, dict) and "content" in advisory_data:
+                if (
+                    isinstance(advisory_data["content"], list)
+                    and len(advisory_data["content"]) > 0
+                ):
+                    # Extract the first content item's text
+                    content_item = advisory_data["content"][0]
+                    if isinstance(content_item, dict) and "text" in content_item:
+                        try:
+                            advisory_data = json.loads(content_item["text"])
+                        except json.JSONDecodeError:
+                            # If not valid JSON, use as is
+                            return content_item["text"]
+                    else:
+                        return str(content_item)
+                elif isinstance(advisory_data["content"], str):
+                    # Try to parse content as JSON
+                    try:
+                        advisory_data = json.loads(advisory_data["content"])
+                    except json.JSONDecodeError:
+                        return advisory_data["content"]
+
+            # Now check if the expected keys exist
+            if "location" not in advisory_data:
+                logger.error(
+                    "[MCPTravelAgent] Missing 'location' key in advisory response"
+                )
+                advisory_data["location"] = formatted_location
+
+            # Ensure all required fields exist
+            required_fields = [
+                "safety_info",
+                "health_info",
+                "entry_requirements",
+                "local_laws",
+            ]
+            for field in required_fields:
+                if field not in advisory_data:
+                    advisory_data[field] = "Information not available"
+
+            if "updated_at" not in advisory_data:
+                advisory_data["updated_at"] = datetime.now().isoformat()
+
+            # Format travel advisory
+            advisory = f"🚨 Travel Advisory for {advisory_data['location']} 🚨\n\n"
+            advisory += f"Weather Alerts: {weather_alerts}\n\n"
+
+            advisory += "🛡️ Safety Information:\n"
+            advisory += f"  {advisory_data['safety_info']}\n\n"
+
+            advisory += "🏥 Health Information:\n"
+            advisory += f"  {advisory_data['health_info']}\n\n"
+
+            advisory += "🛂 Entry Requirements:\n"
+            advisory += f"  {advisory_data['entry_requirements']}\n\n"
+
+            advisory += "📜 Local Laws:\n"
+            advisory += f"  {advisory_data['local_laws']}\n\n"
+
+            advisory += f"Last Updated: {advisory_data['updated_at']}"
+
+            return advisory
+        except Exception as e:
+            logger.error(
+                f"[MCPTravelAgent] Error getting travel advisory from MCP: {e}"
+            )
+            logger.exception("Detailed exception information:")
+            return f"Error: Unable to retrieve travel advisories for {location}. The MCP service might be unavailable."
