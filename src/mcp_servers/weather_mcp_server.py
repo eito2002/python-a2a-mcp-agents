@@ -4,13 +4,15 @@ Weather MCP server implementation.
 This server provides weather-related tools and resources via the MCP protocol.
 """
 
-import asyncio
 import json
 import random
 from datetime import datetime, timedelta
 
-from python_a2a.mcp.fastmcp import (FastMCP, error_response, image_response,
-                                    text_response)
+from python_a2a.mcp.fastmcp import (
+    FastMCP,
+    error_response,
+    text_response,
+)
 
 # Create the MCP server
 weather_mcp = FastMCP(
@@ -132,7 +134,7 @@ def get_weather_forecast(location: str, days: int = 3):
 
     # Parameter validation
     if location is None:
-        print(f"[Weather MCP] Error: location parameter is None")
+        print("[Weather MCP] Error: location parameter is None")
         return error_response("Location parameter is required")
 
     # Convert to lowercase for case-insensitive processing

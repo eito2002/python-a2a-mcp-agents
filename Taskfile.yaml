@@ -1,0 +1,73 @@
+version: "3"
+
+tasks:
+  # Formatting and Linting
+  format:
+    desc: Format code with black
+    cmds:
+      - uv run -m black src/
+
+  lint:
+    desc: Lint code with ruff
+    cmds:
+      - uv run -m ruff src/
+
+  check:
+    desc: Check formatting and linting (without fixing)
+    cmds:
+      - uv run -m black --check src/
+      - uv run -m ruff check src/
+
+  fix:
+    desc: Auto-fix linting issues
+    cmds:
+      - uv run -m black src/
+      - uv run -m ruff check --fix src/
+
+  # MCP Server and Agent Startup
+  mcp:
+    desc: Start MCP server
+    cmds:
+      - uv run -m src.cli mcp
+
+  weather:
+    desc: Start weather agent (port 53537)
+    cmds:
+      - uv run -m src.cli start-agent --agent mcp_weather --port 53537
+
+  travel:
+    desc: Start travel agent (port 53543, connects to weather agent)
+    cmds:
+      - uv run -m src.cli start-agent --agent mcp_travel --port 53543 --connect-to weather:53537
+
+  # Query Execution
+  query-weather:
+    desc: Send query to weather agent (usage - task query-weather QUERY="Tokyo weather")
+    vars:
+      QUERY: '{{.QUERY | default ""}}'
+    cmds:
+      - uv run -m src.cli query "{{.QUERY}}" --agent mcp_weather --agent-ports mcp_weather:53537
+
+  query-travel:
+    desc: Send query to travel agent (usage - task query-travel QUERY="Plan a 3-day trip to Kyoto")
+    vars:
+      QUERY: '{{.QUERY | default ""}}'
+    cmds:
+      - uv run -m src.cli query "{{.QUERY}}" --agent mcp_travel --agent-ports mcp_travel:53543
+
+  # Dependency Management
+  install:
+    desc: Install dependencies
+    cmds:
+      - uv pip install -e .
+
+  install-dev:
+    desc: Install development dependencies
+    cmds:
+      - uv pip install -e ".[dev]"
+
+  setup:
+    desc: Create virtual environment and install dependencies
+    cmds:
+      - uv venv .venv
+      - source .venv/bin/activate && uv pip install -e ".[dev]"

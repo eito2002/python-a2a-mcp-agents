@@ -3,7 +3,6 @@ Network utility functions for the agent network.
 """
 
 import socket
-import threading
 
 
 def find_free_port():

@@ -4,14 +4,11 @@ Maps MCP server implementation.
 This server provides map generation and visualization tools via the MCP protocol.
 """
 
-import asyncio
-import base64
 import json
 import random
 from datetime import datetime
 
-from python_a2a.mcp import (FastMCP, error_response, image_response,
-                            text_response)
+from python_a2a.mcp import FastMCP, error_response, text_response
 
 # Create the MCP server
 maps_mcp = FastMCP(

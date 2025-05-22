@@ -2,14 +2,19 @@
 FastAPI based MCP-enabled travel agent implementation with weather agent integration.
 """
 
-import asyncio
-import json
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, Optional
 
-from python_a2a import (AgentCard, AgentSkill, Message, MessageRole, Task,
-                        TaskState, TaskStatus, TextContent)
-from python_a2a.models import FunctionCallContent, FunctionResponseContent
+from python_a2a import (
+    AgentCard,
+    AgentSkill,
+    Message,
+    MessageRole,
+    Task,
+    TaskState,
+    TaskStatus,
+    TextContent,
+)
 
 from agents.mcp.mcp_agent import BaseMCPAgent
 from config import logger
@@ -93,7 +98,7 @@ class MCPTravelAgent(BaseMCPAgent):
         """Initialize MCP servers, discover available tools, and verify agent connections"""
         # First, initialize MCP servers (parent implementation)
         await super().initialize()
-        
+
         if not self._initialized:
             return
 
@@ -252,10 +257,10 @@ class MCPTravelAgent(BaseMCPAgent):
         try:
             response_text = await self._process_travel_query(text)
             return Message(
-                content=TextContent(response_text), 
+                content=TextContent(response_text),
                 role=MessageRole.AGENT,
                 parent_message_id=message.message_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
         except Exception as e:
             # Return error message
@@ -263,7 +268,7 @@ class MCPTravelAgent(BaseMCPAgent):
                 content=TextContent(f"Error processing message: {str(e)}"),
                 role=MessageRole.AGENT,
                 parent_message_id=message.message_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
 
     async def handle_task_async(self, task: Task) -> Task:
@@ -398,9 +403,7 @@ class MCPTravelAgent(BaseMCPAgent):
             )
             return weather_response
         except Exception as e:
-            logger.error(
-                f"[MCPTravelAgent] Error getting weather for {location}: {e}"
-            )
+            logger.error(f"[MCPTravelAgent] Error getting weather for {location}: {e}")
             return f"Unable to retrieve weather for {location} at this time."
 
     async def _plan_trip(self, location: str, days: int) -> str:
@@ -419,14 +422,10 @@ class MCPTravelAgent(BaseMCPAgent):
 
         # Format the city name (capitalize first letter, lowercase the rest)
         formatted_location = location.strip().title()
-        logger.info(
-            f"[MCPTravelAgent] Formatted location name: {formatted_location}"
-        )
+        logger.info(f"[MCPTravelAgent] Formatted location name: {formatted_location}")
 
         weather_query = f"What's the weather forecast for {formatted_location} for the next {days} days?"
-        logger.info(
-            f"[MCPTravelAgent] Querying weather agent with: '{weather_query}'"
-        )
+        logger.info(f"[MCPTravelAgent] Querying weather agent with: '{weather_query}'")
 
         try:
             weather_forecast = await self.call_agent("weather", weather_query)

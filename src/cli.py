@@ -5,13 +5,9 @@ Command Line Interface (CLI) for the agent network.
 import argparse
 import asyncio
 import logging
-import sys
-import time
-from typing import Dict, List, Optional
 
 from python_a2a.models import Message, MessageRole, TextContent
 
-from agents import MCPTravelAgent, MCPWeatherAgent
 from client import A2ANetworkClient
 from config import logger
 from server import AgentServer

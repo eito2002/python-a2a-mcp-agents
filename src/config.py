@@ -3,7 +3,6 @@ Configuration and logging setup for the agent network.
 """
 
 import logging
-import os
 
 # Import OpenAI integrations with proper error handling
 try:

@@ -4,13 +4,15 @@ Travel MCP server implementation.
 This server provides travel-related tools and resources via the MCP protocol.
 """
 
-import asyncio
 import json
 import random
 from datetime import datetime, timedelta
 
-from python_a2a.mcp.fastmcp import (FastMCP, error_response, image_response,
-                                    text_response)
+from python_a2a.mcp.fastmcp import (
+    FastMCP,
+    error_response,
+    text_response,
+)
 
 # Create the MCP server
 travel_mcp = FastMCP(

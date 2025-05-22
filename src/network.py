@@ -2,18 +2,15 @@
 Main Agent Network implementation.
 """
 
-import threading
-import time
 import uuid
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Optional, Tuple
 
 from python_a2a import AgentNetwork as A2ANetwork
 from python_a2a import Message, MessageRole, TextContent
 from python_a2a.client import A2AClient
 
-from config import logger, running_agents
+from config import logger
 from routing import AIRouter, KeywordRouter
-from utils import find_free_port
 
 
 class AgentNetwork:

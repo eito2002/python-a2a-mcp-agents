@@ -2,15 +2,18 @@
 Client for interacting with Agent Network through CLI
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 import requests
 from python_a2a.client import A2AClient
-from python_a2a.models import (Conversation, ErrorContent, Message,
-                               MessageRole, TextContent)
+from python_a2a.models import (
+    Conversation,
+    ErrorContent,
+    Message,
+    MessageRole,
+)
 
 from server import AgentServer
-from utils import find_free_port
 
 
 class A2AAgentClient(A2AClient):

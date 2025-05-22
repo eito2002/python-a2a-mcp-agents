@@ -3,23 +3,19 @@ FastAPI based MCP agent implementation.
 This file replaces the previous async_agent.py and adds MCP capabilities.
 """
 
-import asyncio
 import json
-import threading
 import uuid
-from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Dict, Optional
 
 import uvicorn
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
-from python_a2a.models.agent import AgentCard, AgentSkill
-from python_a2a.models.content import ErrorContent, TextContent
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from python_a2a.models.agent import AgentCard
+from python_a2a.models.content import TextContent
 from python_a2a.models.message import Message, MessageRole
 from python_a2a.models.task import Task, TaskState, TaskStatus
 from starlette.middleware.cors import CORSMiddleware
-from python_a2a.models import FunctionCallContent, FunctionResponseContent
+from python_a2a.models import FunctionResponseContent
 
 from config import logger
 
@@ -713,7 +709,6 @@ class FastAPIAgent:
         Returns:
             Uvicorn configuration object
         """
-        import logging
 
         # Create Uvicorn config
         config = uvicorn.Config(app=self.app, host=host, port=port, log_level=log_level)
@@ -926,4 +921,4 @@ class BaseMCPAgent(FastAPIAgent):
                 )
 
         # Default to parent implementation for non-function calls
-        return await super().handle_message_async(message) 
+        return await super().handle_message_async(message)
