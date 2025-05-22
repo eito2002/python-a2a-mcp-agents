@@ -47,8 +47,8 @@ agent_network/
 
 - **MCP対応エージェント (`mcp/`)**:
   - **async_agent.py**: FastAPIベースの非同期処理に対応したエージェント基底クラス。`FastAPIAgent`クラスを実装。
-  - **mcp_weather_agent.py**: MCPを活用した拡張天気情報エージェント。`FastAPIAgent`を継承した`AsyncMCPWeatherAgent`クラスを実装。
-  - **mcp_travel_agent.py**: 天気情報と連携した旅行計画エージェント。`FastAPIAgent`を継承した`AsyncMCPTravelAgent`クラスを実装。
+  - **mcp_weather_agent.py**: MCPを活用した拡張天気情報エージェント。`FastAPIAgent`を継承した`MCPWeatherAgent`クラスを実装。
+  - **mcp_travel_agent.py**: 天気情報と連携した旅行計画エージェント。`FastAPIAgent`を継承した`MCPTravelAgent`クラスを実装。
 
 ### MCPサーバー (`mcp_servers/`)
 
@@ -80,9 +80,9 @@ agent_network/
 
 現在のエージェントクラス階層：
 
-- **FastAPIAgent**: FastAPIベースの非同期エージェント基盤（`agents/mcp/async_agent.py`）
-  - **AsyncMCPWeatherAgent**: MCP機能を統合した天気エージェント（`agents/mcp/mcp_weather_agent.py`）
-  - **AsyncMCPTravelAgent**: 天気エージェントと連携する旅行エージェント（`agents/mcp/mcp_travel_agent.py`）
+- **BaseMCPAgent**: FastAPIベースの非同期エージェント基盤（`agents/mcp/async_agent.py`）
+  - **MCPWeatherAgent**: MCP機能を統合した天気エージェント（`agents/mcp/mcp_weather_agent.py`）
+  - **MCPTravelAgent**: 天気エージェントと連携する旅行エージェント（`agents/mcp/mcp_travel_agent.py`）
 
 ## MCP統合の特徴
 

@@ -15,7 +15,7 @@ from agents.mcp.mcp_agent import BaseMCPAgent
 from config import logger
 
 
-class AsyncMCPTravelAgent(BaseMCPAgent):
+class MCPTravelAgent(BaseMCPAgent):
     """Travel agent that uses MCP for enhanced capabilities with FastAPI backend and integrates with other agents."""
 
     def __init__(
@@ -101,10 +101,10 @@ class AsyncMCPTravelAgent(BaseMCPAgent):
             # Verify agent connections
             await self._verify_agent_connections()
             logger.info(
-                f"[AsyncMCPTravelAgent] Connected to agents: {self.agent_connections}"
+                f"[MCPTravelAgent] Connected to agents: {self.agent_connections}"
             )
         except Exception as e:
-            logger.error(f"[AsyncMCPTravelAgent] Failed to verify agent connections: {e}")
+            logger.error(f"[MCPTravelAgent] Failed to verify agent connections: {e}")
 
     async def _verify_agent_connections(self):
         """Verify that all connected agents are available"""
@@ -118,15 +118,15 @@ class AsyncMCPTravelAgent(BaseMCPAgent):
                         if response.status == 200:
                             agent_info = await response.json()
                             logger.info(
-                                f"[AsyncMCPTravelAgent] Connected to {agent_name} agent: {agent_info.get('name', 'Unknown')}"
+                                f"[MCPTravelAgent] Connected to {agent_name} agent: {agent_info.get('name', 'Unknown')}"
                             )
                         else:
                             logger.warning(
-                                f"[AsyncMCPTravelAgent] Failed to connect to {agent_name} agent: {response.status}"
+                                f"[MCPTravelAgent] Failed to connect to {agent_name} agent: {response.status}"
                             )
             except Exception as e:
                 logger.error(
-                    f"[AsyncMCPTravelAgent] Error connecting to {agent_name} agent: {e}"
+                    f"[MCPTravelAgent] Error connecting to {agent_name} agent: {e}"
                 )
 
     async def call_agent(
@@ -191,7 +191,7 @@ class AsyncMCPTravelAgent(BaseMCPAgent):
                             f"Error calling agent: {response.status} - {error_text}"
                         )
         except Exception as e:
-            logger.error(f"[AsyncMCPTravelAgent] Error calling agent {agent_name}: {e}")
+            logger.error(f"[MCPTravelAgent] Error calling agent {agent_name}: {e}")
             raise
 
     async def process_function_call(self, function_call):
@@ -380,7 +380,7 @@ class AsyncMCPTravelAgent(BaseMCPAgent):
 
         # Log when no city is found
         logger.info(
-            f"[AsyncMCPTravelAgent] No location found in query: '{query}', using default"
+            f"[MCPTravelAgent] No location found in query: '{query}', using default"
         )
 
         # Default to London if no city found
@@ -388,18 +388,18 @@ class AsyncMCPTravelAgent(BaseMCPAgent):
 
     async def _get_weather_for_location(self, location: str) -> str:
         """Get weather information for a location from the weather agent"""
-        logger.info(f"[AsyncMCPTravelAgent] Getting weather for location: '{location}'")
+        logger.info(f"[MCPTravelAgent] Getting weather for location: '{location}'")
         try:
             # Call the weather agent
             weather_query = f"What's the weather in {location}?"
             weather_response = await self.call_agent("weather", weather_query)
             logger.info(
-                f"[AsyncMCPTravelAgent] Received weather response for {location}: {weather_response[:100]}..."
+                f"[MCPTravelAgent] Received weather response for {location}: {weather_response[:100]}..."
             )
             return weather_response
         except Exception as e:
             logger.error(
-                f"[AsyncMCPTravelAgent] Error getting weather for {location}: {e}"
+                f"[MCPTravelAgent] Error getting weather for {location}: {e}"
             )
             return f"Unable to retrieve weather for {location} at this time."
 
@@ -415,28 +415,28 @@ class AsyncMCPTravelAgent(BaseMCPAgent):
             Trip plan
         """
         # Get weather forecast from weather agent
-        logger.info(f"[AsyncMCPTravelAgent] Planning {days}-day trip to {location}")
+        logger.info(f"[MCPTravelAgent] Planning {days}-day trip to {location}")
 
         # Format the city name (capitalize first letter, lowercase the rest)
         formatted_location = location.strip().title()
         logger.info(
-            f"[AsyncMCPTravelAgent] Formatted location name: {formatted_location}"
+            f"[MCPTravelAgent] Formatted location name: {formatted_location}"
         )
 
         weather_query = f"What's the weather forecast for {formatted_location} for the next {days} days?"
         logger.info(
-            f"[AsyncMCPTravelAgent] Querying weather agent with: '{weather_query}'"
+            f"[MCPTravelAgent] Querying weather agent with: '{weather_query}'"
         )
 
         try:
             weather_forecast = await self.call_agent("weather", weather_query)
             logger.info(
-                f"[AsyncMCPTravelAgent] Successfully received weather forecast for {formatted_location}"
+                f"[MCPTravelAgent] Successfully received weather forecast for {formatted_location}"
             )
         except Exception as e:
-            logger.error(f"[AsyncMCPTravelAgent] Error getting weather forecast: {e}")
+            logger.error(f"[MCPTravelAgent] Error getting weather forecast: {e}")
             logger.error(
-                f"[AsyncMCPTravelAgent] Exception details: {str(e.__class__.__name__)} - {str(e)}"
+                f"[MCPTravelAgent] Exception details: {str(e.__class__.__name__)} - {str(e)}"
             )
             weather_forecast = "Weather forecast unavailable"
 
@@ -476,7 +476,7 @@ class AsyncMCPTravelAgent(BaseMCPAgent):
         Returns:
             Activity suggestions
         """
-        logger.info(f"[AsyncMCPTravelAgent] Suggesting activities for {location}")
+        logger.info(f"[MCPTravelAgent] Suggesting activities for {location}")
 
         # Get weather if not provided
         if weather_condition is None:
@@ -484,11 +484,11 @@ class AsyncMCPTravelAgent(BaseMCPAgent):
             try:
                 weather_condition = await self.call_agent("weather", weather_query)
                 logger.info(
-                    f"[AsyncMCPTravelAgent] Got weather condition for activities: {weather_condition[:100]}..."
+                    f"[MCPTravelAgent] Got weather condition for activities: {weather_condition[:100]}..."
                 )
             except Exception as e:
                 logger.error(
-                    f"[AsyncMCPTravelAgent] Error getting weather for activities: {e}"
+                    f"[MCPTravelAgent] Error getting weather for activities: {e}"
                 )
                 weather_condition = "Weather information unavailable"
 
@@ -504,7 +504,7 @@ class AsyncMCPTravelAgent(BaseMCPAgent):
 
         # Log the weather classification
         logger.info(
-            f"[AsyncMCPTravelAgent] Weather classification - Good: {is_good_weather}, Bad: {is_bad_weather}"
+            f"[MCPTravelAgent] Weather classification - Good: {is_good_weather}, Bad: {is_bad_weather}"
         )
 
         # Generate activity suggestions
@@ -546,15 +546,15 @@ class AsyncMCPTravelAgent(BaseMCPAgent):
         Returns:
             Travel advisory information
         """
-        logger.info(f"[AsyncMCPTravelAgent] Getting travel advisory for {location}")
+        logger.info(f"[MCPTravelAgent] Getting travel advisory for {location}")
 
         # Get weather alerts from weather agent
         weather_query = f"Are there any weather alerts for {location}?"
         try:
             weather_alerts = await self.call_agent("weather", weather_query)
-            logger.info(f"[AsyncMCPTravelAgent] Received weather alerts for {location}")
+            logger.info(f"[MCPTravelAgent] Received weather alerts for {location}")
         except Exception as e:
-            logger.error(f"[AsyncMCPTravelAgent] Error getting weather alerts: {e}")
+            logger.error(f"[MCPTravelAgent] Error getting weather alerts: {e}")
             weather_alerts = "Weather alert information unavailable"
 
         # Generate travel advisory
