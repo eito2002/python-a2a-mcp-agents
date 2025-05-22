@@ -11,11 +11,11 @@ from python_a2a import (AgentCard, AgentSkill, Message, MessageRole, Task,
                         TaskState, TaskStatus, TextContent)
 from python_a2a.models import FunctionCallContent, FunctionResponseContent
 
-from agents.mcp.async_agent import FastAPIAgent
+from agents.mcp.mcp_agent import BaseMCPAgent
 from config import logger
 
 
-class AsyncMCPWeatherAgent(FastAPIAgent):
+class AsyncMCPWeatherAgent(BaseMCPAgent):
     """Weather agent that uses MCP for enhanced capabilities with FastAPI backend."""
 
     def __init__(self, mcp_servers: Optional[Dict[str, str]] = None, **kwargs):
@@ -70,114 +70,8 @@ class AsyncMCPWeatherAgent(FastAPIAgent):
                 "maps": "http://localhost:5002",
             }
 
-        # MCP-related configuration and initialization
-        self.mcp_servers = mcp_servers
-        self.mcp_tools = {}  # Tools discovered from servers
-        self._initialized = False
-
-        # Initialize the FastAPIAgent
-        super().__init__(agent_card=agent_card, **kwargs)
-
-    async def initialize(self):
-        """Initialize MCP servers and discover available tools"""
-        if self._initialized:
-            return
-
-        try:
-            # Initialize MCP connections (e.g., tool discovery)
-            await self._discover_mcp_tools()
-            self._initialized = True
-            logger.info(
-                f"[AsyncMCPWeatherAgent] Initialized with MCP servers: {self.mcp_servers}"
-            )
-        except Exception as e:
-            logger.error(f"[AsyncMCPWeatherAgent] Failed to initialize: {e}")
-
-    async def _discover_mcp_tools(self):
-        """Discover available MCP tools"""
-        # This should be replaced with actual MCP client code
-        # The following is a simplified implementation for demonstration
-        import aiohttp
-
-        for server_name, server_url in self.mcp_servers.items():
-            try:
-                async with aiohttp.ClientSession() as session:
-                    # Get tool information from MCP server
-                    tools_url = f"{server_url}/tools"
-                    async with session.get(tools_url) as response:
-                        if response.status == 200:
-                            tools_data = await response.json()
-                            # Handle different response formats
-                            if isinstance(tools_data, dict) and "tools" in tools_data:
-                                # Format: {"tools": [...]}
-                                self.mcp_tools[server_name] = tools_data["tools"]
-                            elif isinstance(tools_data, list):
-                                # Format: [...]
-                                self.mcp_tools[server_name] = tools_data
-                            else:
-                                # Unknown format, use empty list
-                                self.mcp_tools[server_name] = []
-
-                            logger.info(
-                                f"[AsyncMCPWeatherAgent] Discovered {len(self.mcp_tools[server_name])} tools from {server_name}"
-                            )
-                        else:
-                            logger.warning(
-                                f"[AsyncMCPWeatherAgent] Failed to get tools from {server_name}: {response.status}"
-                            )
-            except Exception as e:
-                logger.error(
-                    f"[AsyncMCPWeatherAgent] Error discovering tools from {server_name}: {e}"
-                )
-
-    async def call_mcp_tool(self, server_name: str, tool_name: str, **kwargs):
-        """
-        Call a tool on the specified MCP server
-
-        Args:
-            server_name: MCP server name
-            tool_name: Tool name
-            **kwargs: Parameters to pass to the tool
-
-        Returns:
-            Tool execution result
-        """
-        # This should be replaced with actual MCP client code
-        import aiohttp
-
-        if not self._initialized:
-            await self.initialize()
-
-        server_url = self.mcp_servers.get(server_name)
-        if not server_url:
-            raise ValueError(f"Unknown MCP server: {server_name}")
-
-        tool_url = f"{server_url}/tools/{tool_name}"
-
-        # デバッグ情報を追加
-        logger.info(
-            f"[AsyncMCPWeatherAgent] Calling MCP tool: {tool_name} on {server_name} with params: {kwargs}"
-        )
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(tool_url, json=kwargs) as response:
-                    if response.status == 200:
-                        result = await response.text()
-                        return result
-                    else:
-                        error_text = await response.text()
-                        logger.error(
-                            f"[AsyncMCPWeatherAgent] MCP server returned error: {response.status} - {error_text}"
-                        )
-                        raise RuntimeError(
-                            f"Error calling MCP tool: {response.status} - {error_text}"
-                        )
-        except Exception as e:
-            logger.error(
-                f"[AsyncMCPWeatherAgent] Error calling MCP tool {tool_name}: {e}"
-            )
-            raise
+        # Initialize the BaseMCPAgent
+        super().__init__(agent_card=agent_card, mcp_servers=mcp_servers, **kwargs)
 
     async def process_function_call(self, function_call):
         """
@@ -220,38 +114,9 @@ class AsyncMCPWeatherAgent(FastAPIAgent):
         Returns:
             Response message
         """
-        # Initialize if needed
-        if not self._initialized:
-            await self.initialize()
-
-        # Handle function calls
+        # Use BaseMCPAgent's implementation for function calls
         if hasattr(message.content, "type") and message.content.type == "function_call":
-            function_call = message.content.function_call
-
-            try:
-                # Process the function call
-                result = await self.process_function_call(function_call)
-
-                # Create response with the result
-                return Message(
-                    content=FunctionResponseContent(
-                        name=function_call.name, response=result
-                    ),
-                    role=MessageRole.AGENT,
-                    parent_message_id=message.message_id,
-                    conversation_id=message.conversation_id,
-                )
-            except Exception as e:
-                # Handle function call errors
-                logger.error(f"Error processing function call: {e}")
-                return Message(
-                    content=TextContent(
-                        text=f"Error processing function call: {str(e)}"
-                    ),
-                    role=MessageRole.AGENT,
-                    parent_message_id=message.message_id,
-                    conversation_id=message.conversation_id,
-                )
+            return await super().handle_message_async(message)
 
         # Handle text messages
         if hasattr(message.content, "text"):
@@ -588,12 +453,6 @@ Wind Speed: {weather_data['wind_speed']} {weather_data['wind_unit']}"""
             formatted_city = city.strip().title()
             logger.info(f"[AsyncMCPWeatherAgent] Formatted city name: {formatted_city}")
 
-            # Add more detailed debug logs
-            params = {"location": formatted_city, "days": days}
-            logger.info(
-                f"[AsyncMCPWeatherAgent] Calling MCP tool get_weather_forecast with params: {params}"
-            )
-
             # Call MCP tool to get weather forecast
             forecast_json = await self.call_mcp_tool(
                 server_name="weather",
@@ -602,23 +461,13 @@ Wind Speed: {weather_data['wind_speed']} {weather_data['wind_unit']}"""
                 days=days,
             )
 
-            # Output received JSON for debugging
-            logger.info(
-                f"[AsyncMCPWeatherAgent] Received forecast JSON: {forecast_json[:200]}..."
-            )
-
             # Parse JSON response
             forecast_data = json.loads(forecast_json)
             logger.info(
                 f"[AsyncMCPWeatherAgent] Successfully received forecast data for {formatted_city}"
             )
 
-            # Debug response structure
-            logger.info(
-                f"[AsyncMCPWeatherAgent] Forecast data keys: {list(forecast_data.keys())}"
-            )
-
-            # Format forecast as text - more robust implementation
+            # Format forecast as text
             result = f"{days}-Day Weather Forecast for {formatted_city}:\n\n"
 
             # If 'location' and 'forecast' keys exist

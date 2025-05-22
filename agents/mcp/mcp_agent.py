@@ -1,5 +1,6 @@
 """
-FastAPI based asynchronous agent implementation.
+FastAPI based MCP agent implementation.
+This file replaces the previous async_agent.py and adds MCP capabilities.
 """
 
 import asyncio
@@ -18,6 +19,9 @@ from python_a2a.models.content import ErrorContent, TextContent
 from python_a2a.models.message import Message, MessageRole
 from python_a2a.models.task import Task, TaskState, TaskStatus
 from starlette.middleware.cors import CORSMiddleware
+from python_a2a.models import FunctionCallContent, FunctionResponseContent
+
+from config import logger
 
 
 class FastAPIAgent:
@@ -741,3 +745,185 @@ class FastAPIAgent:
 
         # Run the server
         server.run()
+
+
+class BaseMCPAgent(FastAPIAgent):
+    """Base class for MCP-enabled agents with common functionality"""
+
+    def __init__(
+        self,
+        agent_card: AgentCard,
+        mcp_servers: Optional[Dict[str, str]] = None,
+        **kwargs,
+    ):
+        """
+        Initialize the MCP-enabled agent
+
+        Args:
+            agent_card: Card containing agent metadata
+            mcp_servers: Dictionary mapping server names to URLs
+            **kwargs: Additional keyword arguments
+        """
+        # Set up default MCP servers if none provided
+        self.mcp_servers = mcp_servers or {}
+        self.mcp_tools = {}  # Tools discovered from MCP servers
+        self._initialized = False
+
+        # Initialize the FastAPIAgent
+        super().__init__(agent_card=agent_card, **kwargs)
+
+    async def initialize(self):
+        """Initialize MCP servers and discover available tools"""
+        if self._initialized:
+            return
+
+        try:
+            # Initialize MCP connections (e.g., tool discovery)
+            await self._discover_mcp_tools()
+            self._initialized = True
+            logger.info(
+                f"[{self.__class__.__name__}] Initialized with MCP servers: {self.mcp_servers}"
+            )
+        except Exception as e:
+            logger.error(f"[{self.__class__.__name__}] Failed to initialize: {e}")
+
+    async def _discover_mcp_tools(self):
+        """Discover available MCP tools"""
+        import aiohttp
+
+        for server_name, server_url in self.mcp_servers.items():
+            try:
+                async with aiohttp.ClientSession() as session:
+                    # Get tool information from MCP server
+                    tools_url = f"{server_url}/tools"
+                    async with session.get(tools_url) as response:
+                        if response.status == 200:
+                            tools_data = await response.json()
+                            # Handle different response formats
+                            if isinstance(tools_data, dict) and "tools" in tools_data:
+                                # Format: {"tools": [...]}
+                                self.mcp_tools[server_name] = tools_data["tools"]
+                            elif isinstance(tools_data, list):
+                                # Format: [...]
+                                self.mcp_tools[server_name] = tools_data
+                            else:
+                                # Unknown format, use empty list
+                                self.mcp_tools[server_name] = []
+
+                            logger.info(
+                                f"[{self.__class__.__name__}] Discovered {len(self.mcp_tools[server_name])} tools from {server_name}"
+                            )
+                        else:
+                            logger.warning(
+                                f"[{self.__class__.__name__}] Failed to get tools from {server_name}: {response.status}"
+                            )
+            except Exception as e:
+                logger.error(
+                    f"[{self.__class__.__name__}] Error discovering tools from {server_name}: {e}"
+                )
+
+    async def call_mcp_tool(self, server_name: str, tool_name: str, **kwargs):
+        """
+        Call a tool on the specified MCP server
+
+        Args:
+            server_name: MCP server name
+            tool_name: Tool name
+            **kwargs: Parameters to pass to the tool
+
+        Returns:
+            Tool execution result
+        """
+        import aiohttp
+
+        if not self._initialized:
+            await self.initialize()
+
+        server_url = self.mcp_servers.get(server_name)
+        if not server_url:
+            raise ValueError(f"Unknown MCP server: {server_name}")
+
+        tool_url = f"{server_url}/tools/{tool_name}"
+
+        # デバッグ情報を追加
+        logger.info(
+            f"[{self.__class__.__name__}] Calling MCP tool: {tool_name} on {server_name} with params: {kwargs}"
+        )
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(tool_url, json=kwargs) as response:
+                    if response.status == 200:
+                        result = await response.text()
+                        return result
+                    else:
+                        error_text = await response.text()
+                        logger.error(
+                            f"[{self.__class__.__name__}] MCP server returned error: {response.status} - {error_text}"
+                        )
+                        raise RuntimeError(
+                            f"Error calling MCP tool: {response.status} - {error_text}"
+                        )
+        except Exception as e:
+            logger.error(
+                f"[{self.__class__.__name__}] Error calling MCP tool {tool_name}: {e}"
+            )
+            raise
+
+    async def process_function_call(self, function_call):
+        """
+        Process a function call (to be implemented by subclasses)
+
+        Args:
+            function_call: Function call information
+
+        Returns:
+            Function execution result
+        """
+        raise NotImplementedError("Subclasses must implement process_function_call")
+
+    async def handle_message_async(self, message: Message) -> Message:
+        """
+        Asynchronous message handler with function call handling
+
+        Args:
+            message: Received A2A message
+
+        Returns:
+            Response message
+        """
+        # Initialize if needed
+        if not self._initialized:
+            await self.initialize()
+
+        # Handle function calls
+        if hasattr(message.content, "type") and message.content.type == "function_call":
+            function_call = message.content.function_call
+
+            try:
+                # Process the function call
+                result = await self.process_function_call(function_call)
+
+                # Create response with the result
+                return Message(
+                    content=FunctionResponseContent(
+                        name=function_call.name, response=result
+                    ),
+                    role=MessageRole.AGENT,
+                    parent_message_id=message.message_id,
+                    conversation_id=message.conversation_id,
+                )
+            except Exception as e:
+                # Handle function call errors
+                logger.error(f"Error processing function call: {e}")
+                return Message(
+                    content=TextContent(
+                        text=f"Error processing function call: {str(e)}"
+                    ),
+                    role=MessageRole.AGENT,
+                    parent_message_id=message.message_id,
+                    conversation_id=message.conversation_id,
+                )
+
+        # Default to parent implementation for non-function calls
+        return await super().handle_message_async(message) 

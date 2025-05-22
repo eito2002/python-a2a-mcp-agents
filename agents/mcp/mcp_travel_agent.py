@@ -11,11 +11,11 @@ from python_a2a import (AgentCard, AgentSkill, Message, MessageRole, Task,
                         TaskState, TaskStatus, TextContent)
 from python_a2a.models import FunctionCallContent, FunctionResponseContent
 
-from agents.mcp.async_agent import FastAPIAgent
+from agents.mcp.mcp_agent import BaseMCPAgent
 from config import logger
 
 
-class AsyncMCPTravelAgent(FastAPIAgent):
+class AsyncMCPTravelAgent(BaseMCPAgent):
     """Travel agent that uses MCP for enhanced capabilities with FastAPI backend and integrates with other agents."""
 
     def __init__(
@@ -82,72 +82,29 @@ class AsyncMCPTravelAgent(FastAPIAgent):
                 "weather": "http://localhost:5000"
             }
 
-        # MCP-related configuration and initialization
-        self.mcp_servers = mcp_servers
+        # Agent connections for inter-agent communication
         self.agent_connections = agent_connections
-        self.mcp_tools = {}  # Tools discovered from servers
         self.conversation_history = {}  # Store conversation history with other agents
-        self._initialized = False
 
-        # Initialize the FastAPIAgent
-        super().__init__(agent_card=agent_card, **kwargs)
+        # Initialize the BaseMCPAgent
+        super().__init__(agent_card=agent_card, mcp_servers=mcp_servers, **kwargs)
 
     async def initialize(self):
-        """Initialize MCP servers and discover available tools"""
-        if self._initialized:
+        """Initialize MCP servers, discover available tools, and verify agent connections"""
+        # First, initialize MCP servers (parent implementation)
+        await super().initialize()
+        
+        if not self._initialized:
             return
 
         try:
-            # Initialize MCP connections (e.g., tool discovery)
-            await self._discover_mcp_tools()
-
             # Verify agent connections
             await self._verify_agent_connections()
-
-            self._initialized = True
-            logger.info(
-                f"[AsyncMCPTravelAgent] Initialized with MCP servers: {self.mcp_servers}"
-            )
             logger.info(
                 f"[AsyncMCPTravelAgent] Connected to agents: {self.agent_connections}"
             )
         except Exception as e:
-            logger.error(f"[AsyncMCPTravelAgent] Failed to initialize: {e}")
-
-    async def _discover_mcp_tools(self):
-        """Discover available MCP tools"""
-        import aiohttp
-
-        for server_name, server_url in self.mcp_servers.items():
-            try:
-                async with aiohttp.ClientSession() as session:
-                    # Get tool information from MCP server
-                    tools_url = f"{server_url}/tools"
-                    async with session.get(tools_url) as response:
-                        if response.status == 200:
-                            tools_data = await response.json()
-                            # Handle different response formats
-                            if isinstance(tools_data, dict) and "tools" in tools_data:
-                                # Format: {"tools": [...]}
-                                self.mcp_tools[server_name] = tools_data["tools"]
-                            elif isinstance(tools_data, list):
-                                # Format: [...]
-                                self.mcp_tools[server_name] = tools_data
-                            else:
-                                # Unknown format, use empty list
-                                self.mcp_tools[server_name] = []
-
-                            logger.info(
-                                f"[AsyncMCPTravelAgent] Discovered {len(self.mcp_tools[server_name])} tools from {server_name}"
-                            )
-                        else:
-                            logger.warning(
-                                f"[AsyncMCPTravelAgent] Failed to get tools from {server_name}: {response.status}"
-                            )
-            except Exception as e:
-                logger.error(
-                    f"[AsyncMCPTravelAgent] Error discovering tools from {server_name}: {e}"
-                )
+            logger.error(f"[AsyncMCPTravelAgent] Failed to verify agent connections: {e}")
 
     async def _verify_agent_connections(self):
         """Verify that all connected agents are available"""
@@ -171,46 +128,6 @@ class AsyncMCPTravelAgent(FastAPIAgent):
                 logger.error(
                     f"[AsyncMCPTravelAgent] Error connecting to {agent_name} agent: {e}"
                 )
-
-    async def call_mcp_tool(self, server_name: str, tool_name: str, **kwargs):
-        """
-        Call a tool on the specified MCP server
-
-        Args:
-            server_name: MCP server name
-            tool_name: Tool name
-            **kwargs: Parameters to pass to the tool
-
-        Returns:
-            Tool execution result
-        """
-        import aiohttp
-
-        if not self._initialized:
-            await self.initialize()
-
-        server_url = self.mcp_servers.get(server_name)
-        if not server_url:
-            raise ValueError(f"Unknown MCP server: {server_name}")
-
-        tool_url = f"{server_url}/tools/{tool_name}"
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(tool_url, json=kwargs) as response:
-                    if response.status == 200:
-                        result = await response.text()
-                        return result
-                    else:
-                        error_text = await response.text()
-                        raise RuntimeError(
-                            f"Error calling MCP tool: {response.status} - {error_text}"
-                        )
-        except Exception as e:
-            logger.error(
-                f"[AsyncMCPTravelAgent] Error calling MCP tool {tool_name}: {e}"
-            )
-            raise
 
     async def call_agent(
         self, agent_name: str, query: str, conversation_id: Optional[str] = None
@@ -320,29 +237,9 @@ class AsyncMCPTravelAgent(FastAPIAgent):
         if not self._initialized:
             await self.initialize()
 
-        # Handle function calls
+        # Handle function calls using parent implementation
         if hasattr(message.content, "type") and message.content.type == "function_call":
-            function_call = message.content.function_call
-
-            try:
-                # Process the function call
-                result = await self.process_function_call(function_call)
-
-                # Create response with the result
-                return Message(
-                    content=FunctionResponseContent(
-                        name=function_call.name, response=result
-                    ),
-                    role=MessageRole.AGENT,
-                )
-            except Exception as e:
-                # Return error message
-                return Message(
-                    content=TextContent(
-                        f"Error processing function {function_call.name}: {str(e)}"
-                    ),
-                    role=MessageRole.AGENT,
-                )
+            return await super().handle_message_async(message)
 
         # Regular message processing
         text = ""
@@ -354,12 +251,19 @@ class AsyncMCPTravelAgent(FastAPIAgent):
         # Process the message
         try:
             response_text = await self._process_travel_query(text)
-            return Message(content=TextContent(response_text), role=MessageRole.AGENT)
+            return Message(
+                content=TextContent(response_text), 
+                role=MessageRole.AGENT,
+                parent_message_id=message.message_id,
+                conversation_id=message.conversation_id
+            )
         except Exception as e:
             # Return error message
             return Message(
                 content=TextContent(f"Error processing message: {str(e)}"),
                 role=MessageRole.AGENT,
+                parent_message_id=message.message_id,
+                conversation_id=message.conversation_id
             )
 
     async def handle_task_async(self, task: Task) -> Task:

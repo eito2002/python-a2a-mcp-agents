@@ -15,7 +15,7 @@ agent_network/
 │   ├── __init__.py            # エージェントモジュール初期化
 │   ├── mcp/                   # MCP対応エージェント実装
 │   │   ├── __init__.py        # MCPエージェントモジュール初期化
-│   │   ├── async_agent.py     # 非同期エージェント基底クラス
+│   │   ├── mcp_agent.py       # MCPエージェント基底クラス
 │   │   ├── mcp_weather_agent.py # MCP対応天気エージェント
 │   │   └── mcp_travel_agent.py # MCP対応旅行エージェント
 ├── mcp_servers/               # MCPサーバー実装
