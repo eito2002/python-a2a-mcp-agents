@@ -10,79 +10,81 @@ Agent Networkは、特殊化された複数のエージェントを調整し、M
 ## ディレクトリ構成
 
 ```
-agent_network/
-├── agents/                    # エージェント実装
-│   ├── __init__.py            # エージェントモジュール初期化
-│   ├── mcp/                   # MCP対応エージェント実装
-│   │   ├── __init__.py        # MCPエージェントモジュール初期化
-│   │   ├── mcp_agent.py       # MCPエージェント基底クラス
-│   │   ├── mcp_weather_agent.py # MCP対応天気エージェント
-│   │   └── mcp_travel_agent.py # MCP対応旅行エージェント
-├── mcp_servers/               # MCPサーバー実装
-│   ├── weather_mcp_server.py  # 天気情報MCPサーバー
-│   ├── maps_mcp_server.py     # 地図生成MCPサーバー
-│   └── travel_mcp_server.py   # 旅行情報MCPサーバー
-├── server/                    # サーバー管理
-│   ├── __init__.py            # サーバーモジュール初期化
-│   └── agent_server.py        # エージェントサーバー管理クラス
-├── routing/                   # クエリルーティング
-│   ├── __init__.py            # ルーティングモジュール初期化
-│   ├── keyword_router.py      # キーワードベースルーター
-│   └── ai_router.py           # AIベースルーター
-├── utils/                     # ユーティリティ関数
-│   ├── __init__.py            # ユーティリティモジュール初期化
-│   └── network_utils.py       # ネットワークユーティリティ
-├── __init__.py                # パッケージ初期化
-├── __main__.py                # メインエントリーポイント
-├── cli.py                     # コマンドラインインターフェース
-├── client.py                  # ネットワーククライアント
-├── config.py                  # 設定とロギング
-├── network.py                 # エージェントネットワーク管理
+/
+├── src/                       # ソースコード（パッケージ）
+│   ├── agents/                # エージェント実装
+│   │   ├── __init__.py        # エージェントモジュール初期化
+│   │   ├── mcp/               # MCP対応エージェント実装
+│   │   │   ├── __init__.py    # MCPエージェントモジュール初期化
+│   │   │   ├── mcp_agent.py   # MCPエージェント基底クラス
+│   │   │   ├── mcp_weather_agent.py # MCP対応天気エージェント
+│   │   │   └── mcp_travel_agent.py # MCP対応旅行エージェント
+│   ├── mcp_servers/           # MCPサーバー実装
+│   │   ├── weather_mcp_server.py  # 天気情報MCPサーバー
+│   │   ├── maps_mcp_server.py     # 地図生成MCPサーバー
+│   │   └── travel_mcp_server.py   # 旅行情報MCPサーバー
+│   ├── server/                # サーバー管理
+│   │   ├── __init__.py        # サーバーモジュール初期化
+│   │   └── agent_server.py    # エージェントサーバー管理クラス
+│   ├── routing/               # クエリルーティング
+│   │   ├── __init__.py        # ルーティングモジュール初期化
+│   │   ├── keyword_router.py  # キーワードベースルーター
+│   │   └── ai_router.py       # AIベースルーター
+│   ├── utils/                 # ユーティリティ関数
+│   │   ├── __init__.py        # ユーティリティモジュール初期化
+│   │   └── network_utils.py   # ネットワークユーティリティ
+│   ├── __init__.py            # パッケージ初期化
+│   ├── __main__.py            # メインエントリーポイント
+│   ├── cli.py                 # コマンドラインインターフェース
+│   ├── client.py              # ネットワーククライアント
+│   ├── config.py              # 設定とロギング
+│   └── network.py             # エージェントネットワーク管理
+├── pyproject.toml             # プロジェクト設定
 └── README.md                  # プロジェクト説明
 ```
 
 ## 主要コンポーネントの役割
 
-### エージェント (`agents/`)
+### エージェント (`src/agents/`)
 
-- **MCP対応エージェント (`mcp/`)**:
-  - **async_agent.py**: FastAPIベースの非同期処理に対応したエージェント基底クラス。`FastAPIAgent`クラスを実装。
-  - **mcp_weather_agent.py**: MCPを活用した拡張天気情報エージェント。`FastAPIAgent`を継承した`MCPWeatherAgent`クラスを実装。
-  - **mcp_travel_agent.py**: 天気情報と連携した旅行計画エージェント。`FastAPIAgent`を継承した`MCPTravelAgent`クラスを実装。
+- **MCP対応エージェント (`src/agents/mcp/`)**:
+  - **mcp_agent.py**: FastAPIベースの非同期処理に対応したエージェント基底クラス。`MCPAgent`クラスを実装。
+  - **mcp_weather_agent.py**: MCPを活用した拡張天気情報エージェント。`MCPAgent`を継承した`MCPWeatherAgent`クラスを実装。
+  - **mcp_travel_agent.py**: 天気情報と連携した旅行計画エージェント。`MCPAgent`を継承した`MCPTravelAgent`クラスを実装。
 
-### MCPサーバー (`mcp_servers/`)
+### MCPサーバー (`src/mcp_servers/`)
 
 - **weather_mcp_server.py**: 天気情報を提供するMCPサーバー。現在の天気、予報、警報などのツールを提供。
 - **maps_mcp_server.py**: 地図生成機能を提供するMCPサーバー。天気マップや地形マップを生成するツールを提供。
 - **travel_mcp_server.py**: 旅行情報を提供するMCPサーバー。目的地情報、天気に基づく活動提案、旅行アドバイザリー、旅程作成などのツールを提供。
 
-### サーバー管理 (`server/`)
+### サーバー管理 (`src/server/`)
 
 - **agent_server.py**: エージェントサーバーのライフサイクル管理。マルチプロセスでエージェントを起動・停止、情報取得機能を提供。
 
-### ルーティング (`routing/`)
+### ルーティング (`src/routing/`)
 
 - **keyword_router.py**: キーワードベースのクエリルーティング。パターンマッチングで適切なエージェントを選択。
 - **ai_router.py**: AIベースのクエリルーティング。意味理解に基づいて最適なエージェントを選択。
 
-### ユーティリティ (`utils/`)
+### ユーティリティ (`src/utils/`)
 
 - **network_utils.py**: ポート検索などのネットワーク関連ユーティリティ関数を提供。
 
 ### コア機能
 
-- **network.py**: エージェントネットワークの中核機能。エージェントの追加、削除、クエリのルーティングを管理。
-- **cli.py**: コマンドラインインターフェース。ユーザーがエージェントを起動し、クエリを送信するためのツール。
-- **client.py**: エージェントネットワークのクライアント実装。エージェントの発見と通信を担当。
-- **config.py**: 設定とロギングの初期化。グローバル変数の定義。
+- **src/network.py**: エージェントネットワークの中核機能。エージェントの追加、削除、クエリのルーティングを管理。
+- **src/cli.py**: コマンドラインインターフェース。ユーザーがエージェントを起動し、クエリを送信するためのツール。
+- **src/client.py**: エージェントネットワークのクライアント実装。エージェントの発見と通信を担当。
+- **src/config.py**: 設定とロギングの初期化。グローバル変数の定義。
 
 ## クラス階層
 
 現在のエージェントクラス階層：
 
-- **BaseMCPAgent**: FastAPIベースの非同期エージェント基盤（`agents/mcp/async_agent.py`）
-  - **MCPWeatherAgent**: MCP機能を統合した天気エージェント（`agents/mcp/mcp_weather_agent.py`）
-  - **MCPTravelAgent**: 天気エージェントと連携する旅行エージェント（`agents/mcp/mcp_travel_agent.py`）
+- **MCPAgent**: FastAPIベースの非同期エージェント基盤（`src/agents/mcp/mcp_agent.py`）
+  - **MCPWeatherAgent**: MCP機能を統合した天気エージェント（`src/agents/mcp/mcp_weather_agent.py`）
+  - **MCPTravelAgent**: 天気エージェントと連携する旅行エージェント（`src/agents/mcp/mcp_travel_agent.py`）
 
 ## MCP統合の特徴
 
@@ -113,14 +115,14 @@ MCP対応エージェントを使用するには、まずMCPサーバーを起�
 
 ```bash
 # ステップ1: まずMCPサーバーを起動
-python -m cli mcp
+python -m src.cli mcp
 
 # ステップ2: 各エージェントを別々のターミナルで起動
 # ターミナル1: 天気エージェントを固定ポートで起動
-python -m cli start-agent --agent mcp_weather --port 53537
+python -m src.cli start-agent --agent mcp_weather --port 53537
 
 # ターミナル2: 旅行エージェントを起動し、天気エージェントに接続
-python -m cli start-agent --agent mcp_travel --port 53543 --connect-to weather:53537
+python -m src.cli start-agent --agent mcp_travel --port 53543 --connect-to weather:53537
 ```
 
 この方法により、エージェント間の接続を確実に行えます：
@@ -134,16 +136,16 @@ python -m cli start-agent --agent mcp_travel --port 53543 --connect-to weather:5
 
 ```bash
 # MCP対応気象エージェントにクエリを送信
-python -m cli query "Show me a weather map of London" --agent mcp_weather --agent-ports mcp_weather:53537
+python -m src.cli query "Show me a weather map of London" --agent mcp_weather --agent-ports mcp_weather:53537
 
 # MCP対応旅行エージェントにクエリを送信
-python -m cli query "Plan a 3-day trip to Tokyo considering weather" --agent mcp_travel --agent-ports mcp_travel:53543
+python -m src.cli query "Plan a 3-day trip to Tokyo considering weather" --agent mcp_travel --agent-ports mcp_travel:53543
 ```
 
 または、最適なエージェントに自動的にルーティング：
 
 ```bash
-python -m cli query "What's the weather like in Tokyo?" --agent-ports mcp_weather:53537 mcp_travel:53543
+python -m src.cli query "What's the weather like in Tokyo?" --agent-ports mcp_weather:53537 mcp_travel:53543
 ```
 
 ## 依存関係
