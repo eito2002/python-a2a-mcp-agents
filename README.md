@@ -158,7 +158,7 @@ MCPサーバーは、特定の機能やツールを提供する独立したサ�
 
 ### 新しいMCP対応エージェントの追加
 
-1. `FastAPIAgent`を継承した新しいエージェントクラスを作成
+1. `BaseMCPAgent`を継承した新しいエージェントクラスを作成
 2. `handle_message_async`と`handle_task_async`メソッドを実装
 3. 必要なMCPサーバーとの連携を設定
 4. `cli.py`の設定に追加する
