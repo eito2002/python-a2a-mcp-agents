@@ -6,6 +6,7 @@ This server provides weather-related tools and resources via the MCP protocol.
 
 import json
 import random
+import logging
 from datetime import datetime, timedelta
 
 from python_a2a.mcp.fastmcp import (
@@ -13,6 +14,9 @@ from python_a2a.mcp.fastmcp import (
     error_response,
     text_response,
 )
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 # Create the MCP server
 weather_mcp = FastMCP(
@@ -77,7 +81,7 @@ def get_current_weather(location: str):
         Current weather data for the location
     """
     # Add debug log
-    print(f"[Weather MCP] get_current_weather called with location: '{location}'")
+    logger.info(f"[Weather MCP] get_current_weather called with location: '{location}'")
 
     # Convert to lowercase for case-insensitive processing
     location = location.lower().strip()
@@ -85,7 +89,7 @@ def get_current_weather(location: str):
     if location not in WEATHER_DATA:
         # Display list of available cities
         available_cities = ", ".join(WEATHER_DATA.keys())
-        print(
+        logger.warning(
             f"[Weather MCP] Weather data not available for {location}. Available cities: {available_cities}"
         )
         return error_response(
@@ -109,7 +113,7 @@ def get_current_weather(location: str):
         "timestamp": datetime.now().isoformat(),
     }
 
-    print(f"[Weather MCP] Successfully returning weather data for {location}")
+    logger.info(f"[Weather MCP] Successfully returning weather data for {location}")
     return text_response(json.dumps(result, indent=2))
 
 
@@ -128,23 +132,23 @@ def get_weather_forecast(location: str, days: int = 3):
         Weather forecast data for the location
     """
     # Add debug log
-    print(
+    logger.info(
         f"[Weather MCP] get_weather_forecast called with location: '{location}', days: {days}"
     )
 
     # Parameter validation
     if location is None:
-        print("[Weather MCP] Error: location parameter is None")
+        logger.error("[Weather MCP] Error: location parameter is None")
         return error_response("Location parameter is required")
 
     # Convert to lowercase for case-insensitive processing
     location = str(location).lower().strip()
-    print(f"[Weather MCP] Normalized location: '{location}'")
+    logger.debug(f"[Weather MCP] Normalized location: '{location}'")
 
     if location not in WEATHER_DATA:
         # Display list of available cities
         available_cities = ", ".join(WEATHER_DATA.keys())
-        print(
+        logger.warning(
             f"[Weather MCP] Weather data not available for {location}. Available cities: {available_cities}"
         )
         return error_response(
@@ -197,7 +201,7 @@ def get_weather_forecast(location: str, days: int = 3):
         "generated_at": datetime.now().isoformat(),
     }
 
-    print(f"[Weather MCP] Successfully returning forecast data for {location}")
+    logger.info(f"[Weather MCP] Successfully returning forecast data for {location}")
     return text_response(json.dumps(result, indent=2))
 
 
@@ -214,9 +218,12 @@ def get_weather_alert(location: str):
     Returns:
         Active weather alerts for the location
     """
+    logger.info(f"[Weather MCP] get_weather_alert called with location: '{location}'")
+
     location = location.lower()
 
     if location not in WEATHER_DATA:
+        logger.warning(f"[Weather MCP] Weather data not available for {location}")
         return error_response(f"Weather data not available for {location}")
 
     data = WEATHER_DATA[location]
@@ -225,6 +232,7 @@ def get_weather_alert(location: str):
     has_alert = random.random() < 0.3
 
     if not has_alert:
+        logger.info(f"[Weather MCP] No alerts found for {location}")
         return text_response(
             json.dumps(
                 {
@@ -258,6 +266,7 @@ def get_weather_alert(location: str):
         "timestamp": datetime.now().isoformat(),
     }
 
+    logger.info(f"[Weather MCP] Returning alert of type {alert_type} for {location}")
     return text_response(json.dumps(result, indent=2))
 
 
@@ -268,6 +277,9 @@ def get_weather_alert(location: str):
 )
 def current_weather_resource(location: str):
     """Get current weather as a resource."""
+    logger.info(
+        f"[Weather MCP] current_weather_resource called with location: '{location}'"
+    )
     return get_current_weather(location)
 
 
@@ -278,14 +290,24 @@ def current_weather_resource(location: str):
 )
 def forecast_resource(location: str, days: str):
     """Get weather forecast as a resource."""
+    logger.info(
+        f"[Weather MCP] forecast_resource called with location: '{location}', days: {days}"
+    )
     try:
         days_int = int(days)
     except ValueError:
+        logger.error(f"[Weather MCP] Invalid days parameter: {days}")
         return error_response("Days must be a number")
 
     return get_weather_forecast(location, days_int)
 
 
 if __name__ == "__main__":
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
     # Run the MCP server
+    logger.info("[Weather MCP] Starting Weather MCP server")
     weather_mcp.run(host="0.0.0.0", port=5001)

@@ -6,6 +6,7 @@ This server provides travel-related tools and resources via the MCP protocol.
 
 import json
 import random
+import logging
 from datetime import datetime, timedelta
 
 from python_a2a.mcp.fastmcp import (
@@ -13,6 +14,9 @@ from python_a2a.mcp.fastmcp import (
     error_response,
     text_response,
 )
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 # Create the MCP server
 travel_mcp = FastMCP(
@@ -232,9 +236,17 @@ def get_destination_info(location: str):
     Returns:
         Comprehensive travel information for the location
     """
+    # Add debug log
+    logger.info(f"[Travel MCP] get_destination_info called with location: '{location}'")
+
     location = location.lower()
 
     if location not in TRAVEL_DATA:
+        # Display list of available cities
+        available_cities = ", ".join(TRAVEL_DATA.keys())
+        logger.warning(
+            f"[Travel MCP] Travel data not available for {location}. Available cities: {available_cities}"
+        )
         return error_response(f"Travel data not available for {location}")
 
     data = TRAVEL_DATA[location]
@@ -253,6 +265,7 @@ def get_destination_info(location: str):
         "timestamp": datetime.now().isoformat(),
     }
 
+    logger.info(f"[Travel MCP] Successfully returning destination info for {location}")
     return text_response(json.dumps(result, indent=2))
 
 
@@ -271,9 +284,19 @@ def suggest_activities(location: str, weather_condition: str):
     Returns:
         Weather-appropriate activity suggestions
     """
+    # Add debug log
+    logger.info(
+        f"[Travel MCP] suggest_activities called with location: '{location}', weather condition: '{weather_condition}'"
+    )
+
     location = location.lower()
 
     if location not in TRAVEL_DATA:
+        # Display list of available cities
+        available_cities = ", ".join(TRAVEL_DATA.keys())
+        logger.warning(
+            f"[Travel MCP] Travel data not available for {location}. Available cities: {available_cities}"
+        )
         return error_response(f"Travel data not available for {location}")
 
     data = TRAVEL_DATA[location]
@@ -298,10 +321,16 @@ def suggest_activities(location: str, weather_condition: str):
         # Recommend indoor activities
         activities = data["indoor_activities"]
         activity_type = "Indoor"
+        logger.info(
+            f"[Travel MCP] Bad weather detected, recommending indoor activities for {location}"
+        )
     else:
         # Recommend outdoor activities
         activities = data["outdoor_activities"]
         activity_type = "Outdoor"
+        logger.info(
+            f"[Travel MCP] Good weather detected, recommending outdoor activities for {location}"
+        )
 
     # Randomize order and pick top activities
     random.shuffle(activities)
@@ -316,6 +345,9 @@ def suggest_activities(location: str, weather_condition: str):
         "timestamp": datetime.now().isoformat(),
     }
 
+    logger.info(
+        f"[Travel MCP] Successfully returning activity suggestions for {location}"
+    )
     return text_response(json.dumps(result, indent=2))
 
 
@@ -333,9 +365,17 @@ def get_travel_advisory(location: str):
     Returns:
         Travel advisory information
     """
+    # Add debug log
+    logger.info(f"[Travel MCP] get_travel_advisory called with location: '{location}'")
+
     location = location.lower()
 
     if location not in TRAVEL_ADVISORIES:
+        # Display list of available cities
+        available_cities = ", ".join(TRAVEL_ADVISORIES.keys())
+        logger.warning(
+            f"[Travel MCP] Travel advisory not available for {location}. Available cities: {available_cities}"
+        )
         return error_response(f"Travel advisory not available for {location}")
 
     advisory = TRAVEL_ADVISORIES[location]
@@ -349,6 +389,7 @@ def get_travel_advisory(location: str):
         "updated_at": datetime.now().isoformat(),
     }
 
+    logger.info(f"[Travel MCP] Successfully returning travel advisory for {location}")
     return text_response(json.dumps(result, indent=2))
 
 
@@ -368,13 +409,24 @@ def create_trip_itinerary(location: str, days: int = 3, weather_condition: str =
     Returns:
         Daily itinerary for the specified trip
     """
+    # Add debug log
+    logger.info(
+        f"[Travel MCP] create_trip_itinerary called with location: '{location}', days: {days}, weather condition: '{weather_condition}'"
+    )
+
     location = location.lower()
 
     if location not in TRAVEL_DATA:
+        # Display list of available cities
+        available_cities = ", ".join(TRAVEL_DATA.keys())
+        logger.warning(
+            f"[Travel MCP] Travel data not available for {location}. Available cities: {available_cities}"
+        )
         return error_response(f"Travel data not available for {location}")
 
     # Limit days
     days = min(max(1, days), 7)
+    logger.info(f"[Travel MCP] Creating {days}-day itinerary for {location}")
 
     data = TRAVEL_DATA[location]
 
@@ -405,6 +457,9 @@ def create_trip_itinerary(location: str, days: int = 3, weather_condition: str =
         ]
         is_bad_weather = any(
             keyword in weather_condition.lower() for keyword in bad_weather_keywords
+        )
+        logger.info(
+            f"[Travel MCP] Weather consideration for itinerary: {'bad weather' if is_bad_weather else 'good weather'}"
         )
 
     for day in range(1, days + 1):
@@ -501,6 +556,9 @@ def create_trip_itinerary(location: str, days: int = 3, weather_condition: str =
         "generated_at": datetime.now().isoformat(),
     }
 
+    logger.info(
+        f"[Travel MCP] Successfully created {days}-day itinerary for {location}"
+    )
     return text_response(json.dumps(result, indent=2))
 
 
@@ -511,9 +569,13 @@ def create_trip_itinerary(location: str, days: int = 3, weather_condition: str =
 )
 def destination_resource(location: str):
     """Resource endpoint for destination information"""
+    # Add debug log
+    logger.info(f"[Travel MCP] destination_resource called with location: '{location}'")
+
     location = location.lower()
 
     if location not in TRAVEL_DATA:
+        logger.warning(f"[Travel MCP] Travel data not available for {location}")
         return error_response(f"Travel data not available for {location}")
 
     data = TRAVEL_DATA[location]
@@ -531,6 +593,9 @@ def destination_resource(location: str):
         "timezone": data["timezone"],
     }
 
+    logger.info(
+        f"[Travel MCP] Successfully returning destination resource for {location}"
+    )
     return text_response(json.dumps(result, indent=2))
 
 
@@ -541,9 +606,13 @@ def destination_resource(location: str):
 )
 def advisory_resource(location: str):
     """Resource endpoint for travel advisories"""
+    # Add debug log
+    logger.info(f"[Travel MCP] advisory_resource called with location: '{location}'")
+
     location = location.lower()
 
     if location not in TRAVEL_ADVISORIES:
+        logger.warning(f"[Travel MCP] Travel advisory not available for {location}")
         return error_response(f"Travel advisory not available for {location}")
 
     advisory = TRAVEL_ADVISORIES[location]
@@ -556,4 +625,16 @@ def advisory_resource(location: str):
         "local_laws": advisory["local_laws"],
     }
 
+    logger.info(f"[Travel MCP] Successfully returning advisory resource for {location}")
     return text_response(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    # Run the MCP server
+    logger.info("[Travel MCP] Starting Travel MCP server")
+    travel_mcp.run(host="0.0.0.0", port=5003)
